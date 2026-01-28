@@ -42,7 +42,10 @@ in your code,
 import { Fisheye } from "@gyeonghokim/fisheye.js";
 
 const dewarper = new Fisheye({
-  distortion: 0.5, // Distortion coefficient (-1.0 to 1.0)
+  k1: 0.5,
+  k2: 0.0,
+  k3: 0.0,
+  k4: 0.0,
   width: 1920,
   height: 1080,
   fov: 180, // Field of view in degrees
@@ -67,16 +70,26 @@ Creates a new Fisheye dewarper instance.
 
 **Options:**
 
-- `distortion` (number, optional): Distortion coefficient (k1) for the fisheye lens. Typical range: -1.0 to 1.0. Default: `0.5`
-  - Positive values: barrel distortion (fisheye effect)
-  - Negative values: pincushion distortion
-  - 0: no distortion
+- `k1` (number, optional): Fisheye distortion coefficient k1. Typical range: -1.0 to 1.0. Default: `0.5`.
+- `k2` (number, optional): Fisheye distortion coefficient k2. Default: `0`.
+- `k3` (number, optional): Fisheye distortion coefficient k3. Default: `0`.
+- `k4` (number, optional): Fisheye distortion coefficient k4. Default: `0`.
 - `width` (number, optional): Output canvas width. Default: `640`
 - `height` (number, optional): Output canvas height. Default: `480`
 - `fov` (number, optional): Field of view in degrees. Default: `180`
 - `centerX` (number, optional): X offset of the lens center (normalized, -1.0 to 1.0). Default: `0`
 - `centerY` (number, optional): Y offset of the lens center (normalized, -1.0 to 1.0). Default: `0`
 - `zoom` (number, optional): Zoom factor. Default: `1.0`
+
+**Fisheye model (OpenCV):**
+We follow the OpenCV fisheye camera model described here:
+https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+
+```
+theta = atan(r)
+theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8)
+r_d = tan(theta_d)
+```
 
 ### `dewarp(frame: VideoFrame): Promise<VideoFrame>`
 
