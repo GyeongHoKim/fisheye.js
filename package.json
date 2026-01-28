@@ -17,8 +17,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "vite build",
+    "dev": "vite build --watch",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -28,10 +28,16 @@
     "test:unit:watch": "vitest",
     "test:unit:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:repro": "playwright test test/dewarp-typegpu-invariant.spec.ts --config=playwright.invariant.config.ts",
+    "test:e2e:repro:headed": "playwright test test/dewarp-typegpu-invariant.spec.ts --config=playwright.invariant.config.ts --headed",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:e2e:ui": "playwright test --ui",
     "prepare": "husky",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "example:dev": "npm run dev --prefix example",
+    "example:build": "npm run build --prefix example",
+    "example:deploy": "npm run deploy --prefix example"
   },
   "keywords": [
     "fisheye",
@@ -74,8 +80,10 @@
     "happy-dom": "^20.4.0",
     "husky": "^9.1.7",
     "semantic-release": "^25.0.2",
-    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
+    "unplugin-typegpu": "^0.9.0",
+    "vite": "^7.2.4",
+    "vite-plugin-dts": "^4.3.0",
     "vitest": "^4.0.18"
   },
   "engines": {
