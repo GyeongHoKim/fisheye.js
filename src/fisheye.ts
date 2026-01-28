@@ -74,9 +74,23 @@ export class Fisheye {
   private uniformBuffer: UniformBufferType | null = null;
   private inputTexture: InputTextureType | null = null;
   private outputTexture: OutputTextureType | null = null;
+  private inputView: ReturnType<typeof Fisheye.createInputView> | null = null;
+  private outputView: ReturnType<typeof Fisheye.createOutputView> | null = null;
+  private bindGroup: ReturnType<TgpuRootType["createBindGroup"]> | null = null;
+  private dewarpPipeline: ReturnType<
+    TgpuRootType["~unstable"]["createGuardedComputePipeline"]
+  > | null = null;
   private readbackBuffer: GPUBuffer | null = null;
   private inputTextureSize: [number, number] = [0, 0];
   private outputTextureSize: [number, number] = [0, 0];
+
+  private static createInputView(texture: InputTextureType) {
+    return texture.createView(d.texture2d());
+  }
+
+  private static createOutputView(texture: OutputTextureType) {
+    return texture.createView(d.textureStorage2d("rgba8unorm"));
+  }
 
   constructor(options: FisheyeOptions = {}) {
     this.config = this.applyDefaults(options);
@@ -115,6 +129,73 @@ export class Fisheye {
     this.uniformBuffer = this.root
       .createBuffer(FisheyeUniforms, this.getUniformData())
       .$usage("uniform");
+
+    this.dewarpPipeline = this.root["~unstable"].createGuardedComputePipeline(
+      (x: number, y: number) => {
+        "use gpu";
+
+        const inputTex = fisheyeLayout.$.inputTexture;
+        const outputTex = fisheyeLayout.$.outputTexture;
+        const params = fisheyeLayout.$.uniforms;
+
+        const inputDims = std.textureDimensions(inputTex);
+        const outputDims = std.textureDimensions(outputTex);
+        const coord = d.vec2i(x, y);
+
+        // Early exit if outside texture bounds
+        if (x >= outputDims.x || y >= outputDims.y) {
+          return;
+        }
+
+        // Normalize coordinates to [-1, 1]
+        const uv = d.vec2f(
+          (d.f32(coord.x) / d.f32(outputDims.x) - 0.5) * 2.0,
+          (d.f32(coord.y) / d.f32(outputDims.y) - 0.5) * 2.0,
+        );
+
+        // Apply center offset
+        const centered = uv.sub(d.vec2f(params.centerX, params.centerY));
+
+        // Calculate radius from center
+        const r = std.length(centered);
+
+        // Fisheye distortion (OpenCV model): theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8)
+        const theta = std.atan(r);
+        const theta2 = theta * theta;
+        const theta4 = theta2 * theta2;
+        const theta6 = theta4 * theta2;
+        const theta8 = theta4 * theta4;
+        const thetaDistorted =
+          theta *
+          (1.0 + params.k1 * theta2 + params.k2 * theta4 + params.k3 * theta6 + params.k4 * theta8);
+        const rDistorted = std.tan(thetaDistorted);
+
+        // Apply zoom
+        const rScaled = rDistorted / params.zoom;
+
+        // Convert back to texture coordinates
+        let distortedUv = centered;
+        if (r > 0.0001) {
+          distortedUv = centered.mul(rScaled / r);
+        }
+
+        // Add center offset back and denormalize
+        const finalUv = distortedUv.add(d.vec2f(params.centerX, params.centerY)).mul(0.5).add(0.5);
+
+        // Sample from input texture if within bounds
+        if (finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) {
+          const sampleCoord = d.vec2i(
+            d.i32(finalUv.x * d.f32(inputDims.x)),
+            d.i32(finalUv.y * d.f32(inputDims.y)),
+          );
+          const color = std.textureLoad(inputTex, sampleCoord, 0);
+          std.textureStore(outputTex, coord, color);
+        } else {
+          // Black for out of bounds
+          std.textureStore(outputTex, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
+        }
+      },
+    );
   }
 
   /**
@@ -208,6 +289,8 @@ export class Fisheye {
     const root = this.root;
     const device = root.device;
 
+    let bindGroupDirty = false;
+
     // Create or recreate input texture if dimensions changed
     if (
       !this.inputTexture ||
@@ -217,6 +300,8 @@ export class Fisheye {
       this.inputTexture?.destroy();
       this.inputTexture = this.createInputTexture(root, frame.displayWidth, frame.displayHeight);
       this.inputTextureSize = [frame.displayWidth, frame.displayHeight];
+      this.inputView = Fisheye.createInputView(this.inputTexture);
+      bindGroupDirty = true;
     }
 
     // Create or recreate output texture and readback buffer if config dimensions changed
@@ -229,12 +314,14 @@ export class Fisheye {
       this.readbackBuffer?.destroy();
 
       this.outputTexture = this.createOutputTexture(root, this.config.width, this.config.height);
+      this.outputView = Fisheye.createOutputView(this.outputTexture);
       this.readbackBuffer = this.createReadbackBuffer(
         device,
         this.config.width,
         this.config.height,
       );
       this.outputTextureSize = [this.config.width, this.config.height];
+      bindGroupDirty = true;
     }
 
     // Capture for type narrowing
@@ -249,83 +336,20 @@ export class Fisheye {
     // Write VideoFrame to input texture
     inputTexture.write(frame);
 
-    // Create bind group with TypeGPU using texture views
-    const inputView = inputTexture.createView(d.texture2d());
-    const outputView = outputTexture.createView(d.textureStorage2d("rgba8unorm"));
+    if (bindGroupDirty || !this.bindGroup) {
+      this.bindGroup = root.createBindGroup(fisheyeLayout, {
+        inputTexture: this.inputView ?? Fisheye.createInputView(inputTexture),
+        outputTexture: this.outputView ?? Fisheye.createOutputView(outputTexture),
+        uniforms: this.uniformBuffer,
+      });
+    }
 
-    const bindGroup = root.createBindGroup(fisheyeLayout, {
-      inputTexture: inputView,
-      outputTexture: outputView,
-      uniforms: this.uniformBuffer,
-    });
+    const bindGroup = this.bindGroup;
+    const dewarpPipeline = this.dewarpPipeline;
 
-    // Create and execute the compute pipeline using guarded compute pipeline
-    const dewarpPipeline = root["~unstable"].createGuardedComputePipeline(
-      (x: number, y: number) => {
-        "use gpu";
-
-        const inputTex = fisheyeLayout.$.inputTexture;
-        const outputTex = fisheyeLayout.$.outputTexture;
-        const params = fisheyeLayout.$.uniforms;
-
-        const inputDims = std.textureDimensions(inputTex);
-        const outputDims = std.textureDimensions(outputTex);
-        const coord = d.vec2i(x, y);
-
-        // Early exit if outside texture bounds
-        if (x >= outputDims.x || y >= outputDims.y) {
-          return;
-        }
-
-        // Normalize coordinates to [-1, 1]
-        const uv = d.vec2f(
-          (d.f32(coord.x) / d.f32(outputDims.x) - 0.5) * 2.0,
-          (d.f32(coord.y) / d.f32(outputDims.y) - 0.5) * 2.0,
-        );
-
-        // Apply center offset
-        const centered = uv.sub(d.vec2f(params.centerX, params.centerY));
-
-        // Calculate radius from center
-        const r = std.length(centered);
-
-        // Fisheye distortion (OpenCV model): theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8)
-        const theta = std.atan(r);
-        const theta2 = theta * theta;
-        const theta4 = theta2 * theta2;
-        const theta6 = theta4 * theta2;
-        const theta8 = theta4 * theta4;
-        const thetaDistorted =
-          theta *
-          (1.0 + params.k1 * theta2 + params.k2 * theta4 + params.k3 * theta6 + params.k4 * theta8);
-        const rDistorted = std.tan(thetaDistorted);
-
-        // Apply zoom
-        const rScaled = rDistorted / params.zoom;
-
-        // Convert back to texture coordinates
-        let distortedUv = centered;
-        if (r > 0.0001) {
-          distortedUv = centered.mul(rScaled / r);
-        }
-
-        // Add center offset back and denormalize
-        const finalUv = distortedUv.add(d.vec2f(params.centerX, params.centerY)).mul(0.5).add(0.5);
-
-        // Sample from input texture if within bounds
-        if (finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) {
-          const sampleCoord = d.vec2i(
-            d.i32(finalUv.x * d.f32(inputDims.x)),
-            d.i32(finalUv.y * d.f32(inputDims.y)),
-          );
-          const color = std.textureLoad(inputTex, sampleCoord, 0);
-          std.textureStore(outputTex, coord, color);
-        } else {
-          // Black for out of bounds
-          std.textureStore(outputTex, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
-        }
-      },
-    );
+    if (!dewarpPipeline) {
+      throw new Error("Compute pipeline not initialized");
+    }
 
     // Execute the compute shader
     dewarpPipeline.with(bindGroup).dispatchThreads(this.config.width, this.config.height);
@@ -383,6 +407,8 @@ export class Fisheye {
       this.outputTexture = null;
       this.readbackBuffer = null;
       this.outputTextureSize = [0, 0];
+      this.outputView = null;
+      this.bindGroup = null;
     }
   }
 
@@ -400,6 +426,10 @@ export class Fisheye {
     this.readbackBuffer = null;
     this.uniformBuffer = null;
     this.root = null;
+    this.inputView = null;
+    this.outputView = null;
+    this.bindGroup = null;
+    this.dewarpPipeline = null;
     this.inputTextureSize = [0, 0];
     this.outputTextureSize = [0, 0];
   }
