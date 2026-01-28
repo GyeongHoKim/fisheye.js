@@ -1,3 +1,11 @@
+## [1.0.1](https://github.com/GyeongHoKim/fisheye.js/compare/v1.0.0...v1.0.1) (2026-01-28)
+
+
+### Bug Fixes
+
+* **fov:** applied fov ([593a07a](https://github.com/GyeongHoKim/fisheye.js/commit/593a07a08a9ec0cbb698dab98c1108e82d34e47a))
+* **typegpu:** fix shader layout and reference usage in dewarp compute ([ba93ecb](https://github.com/GyeongHoKim/fisheye.js/commit/ba93ecb2fc217bdca4bbae903a4979d8f88b794f))
+
 # 1.0.0 (2026-01-28)
 
 
