@@ -2,12 +2,12 @@
 
 > Modern fisheye dewarping library for the web using **WebGPU** (general-purpose GPU compute)
 
-fisheye.js processes [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)s with **WebGPU compute shaders**—no canvas 2D—and corrects fisheye lens distortion using the **OpenCV fisheye camera model** (polynomial in angle θ with coefficients k1–k4), not a simple radial model.
+fisheye.js processes [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)s with **WebGPU compute shaders**—no canvas 2D—and corrects fisheye lens distortion using the **OpenCV fisheye model** (Kannala–Brandt–style polynomial in angle θ with coefficients k1–k4). This is the same model as in [OpenCV’s fisheye module](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html), not UCM (Unified Camera Model) or a simple radial model.
 
 ## Features
 
 - **WebGPU GPGPU**: Compute-shader pipeline via [TypeGPU](https://www.npmjs.com/package/typegpu); input/output as textures and readback to VideoFrame—no canvas element for dewarping
-- **OpenCV fisheye model**: Distortion model `θ_d = θ × (1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸)` for accurate calibration
+- **OpenCV fisheye (Kannala–Brandt) model**: Distortion model `θ_d = θ × (1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸)` for accurate calibration
 - **WebCodecs**: Built on the [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame) API
 - **ESM**: `import { Fisheye } from "@gyeonghokim/fisheye.js"`
 - **npm**: Install via npm or other package managers
@@ -79,9 +79,8 @@ Creates a new Fisheye dewarper instance.
 - `centerY` (number, optional): Y offset of the lens center (normalized, -1.0 to 1.0). Default: `0`
 - `zoom` (number, optional): Zoom factor. Default: `1.0`
 
-**Fisheye model (OpenCV):**
-We follow the OpenCV fisheye camera model described here:
-https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+**Fisheye model (OpenCV fisheye / Kannala–Brandt):**
+We use the same model as OpenCV’s [fisheye module](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html) (cited there as the “generic camera model” from Kannala & Brandt, 2006). It is a polynomial-in-θ model, not UCM:
 
 ```
 theta = atan(r)
