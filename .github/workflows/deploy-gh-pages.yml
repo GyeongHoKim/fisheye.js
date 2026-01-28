@@ -34,6 +34,9 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      - name: Install example dependencies
+        run: npm install --prefix example
+
       - name: Build example for GitHub Pages
         run: npm run example:build
         env:
