@@ -4,7 +4,7 @@ import * as std from "typegpu/std";
 import type { FisheyeConfig, FisheyeOptions } from "./types";
 
 /**
- * Uniform struct for fisheye dewarping parameters
+ * Uniform struct for fisheye dewarping parameters (type-safe with layout)
  */
 const FisheyeUniforms = d.struct({
   k1: d.f32,
@@ -17,13 +17,15 @@ const FisheyeUniforms = d.struct({
   zoom: d.f32,
   width: d.f32,
   height: d.f32,
+  inputWidth: d.f32,
+  inputHeight: d.f32,
   padding: d.f32,
 });
 
 type TgpuRootType = Awaited<ReturnType<typeof tgpu.init>>;
 
 /**
- * Bind group layout for fisheye dewarping compute shader
+ * Bind group layout for fisheye dewarping compute shader (type-safe access via layout.$)
  */
 const fisheyeLayout = tgpu.bindGroupLayout({
   inputTexture: { texture: d.texture2d() },
@@ -31,22 +33,24 @@ const fisheyeLayout = tgpu.bindGroupLayout({
   uniforms: { uniform: FisheyeUniforms },
 });
 
-// Type definitions for textures with proper usage flags
-type SampledTextureProps = {
+/** Input texture props (sampled + render for write(); per TypeGPU docs) */
+type InputTextureProps = {
   size: readonly [number, number];
   format: "rgba8unorm";
 };
 
-type StorageTextureProps = {
+/** Output texture props (storage) */
+type OutputTextureProps = {
   size: readonly [number, number];
   format: "rgba8unorm";
 };
 
-type InputTextureType = TgpuTexture<SampledTextureProps> & {
+type InputTextureType = TgpuTexture<InputTextureProps> & {
   usableAsSampled: true;
+  usableAsRender: true;
 };
 
-type OutputTextureType = TgpuTexture<StorageTextureProps> & {
+type OutputTextureType = TgpuTexture<OutputTextureProps> & {
   usableAsStorage: true;
 };
 
@@ -74,8 +78,6 @@ export class Fisheye {
   private uniformBuffer: UniformBufferType | null = null;
   private inputTexture: InputTextureType | null = null;
   private outputTexture: OutputTextureType | null = null;
-  private inputView: ReturnType<typeof Fisheye.createInputView> | null = null;
-  private outputView: ReturnType<typeof Fisheye.createOutputView> | null = null;
   private bindGroup: ReturnType<TgpuRootType["createBindGroup"]> | null = null;
   private dewarpPipeline: ReturnType<
     TgpuRootType["~unstable"]["createGuardedComputePipeline"]
@@ -88,14 +90,8 @@ export class Fisheye {
   private pixelBuffer: Uint8Array | null = null;
   private inputTextureSize: [number, number] = [0, 0];
   private outputTextureSize: [number, number] = [0, 0];
-
-  private static createInputView(texture: InputTextureType) {
-    return texture.createView(d.texture2d());
-  }
-
-  private static createOutputView(texture: OutputTextureType) {
-    return texture.createView(d.textureStorage2d("rgba8unorm"));
-  }
+  private uniformInputWidth = 0;
+  private uniformInputHeight = 0;
 
   constructor(options: FisheyeOptions = {}) {
     this.config = this.applyDefaults(options);
@@ -139,65 +135,50 @@ export class Fisheye {
       (x: number, y: number) => {
         "use gpu";
 
-        const inputTex = fisheyeLayout.$.inputTexture;
-        const outputTex = fisheyeLayout.$.outputTexture;
-        const params = fisheyeLayout.$.uniforms;
-
-        const inputDims = std.textureDimensions(inputTex);
-        const outputDims = std.textureDimensions(outputTex);
+        const p = fisheyeLayout.$.uniforms;
+        const outputW = p.width;
+        const outputH = p.height;
+        const inputW = p.inputWidth;
+        const inputH = p.inputHeight;
         const coord = d.vec2i(x, y);
 
-        // Early exit if outside texture bounds
-        if (x >= outputDims.x || y >= outputDims.y) {
+        if (d.f32(x) >= outputW || d.f32(y) >= outputH) {
           return;
         }
 
-        // Normalize coordinates to [-1, 1]
         const uv = d.vec2f(
-          (d.f32(coord.x) / d.f32(outputDims.x) - 0.5) * 2.0,
-          (d.f32(coord.y) / d.f32(outputDims.y) - 0.5) * 2.0,
+          (d.f32(coord.x) / outputW - 0.5) * 2.0,
+          (d.f32(coord.y) / outputH - 0.5) * 2.0,
         );
 
-        // Apply center offset
-        const centered = uv.sub(d.vec2f(params.centerX, params.centerY));
-
-        // Calculate radius from center
+        const centerX = p.centerX;
+        const centerY = p.centerY;
+        const centered = uv.sub(d.vec2f(centerX, centerY));
         const r = std.length(centered);
 
-        // Fisheye distortion (OpenCV model): theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8)
         const theta = std.atan(r);
         const theta2 = theta * theta;
         const theta4 = theta2 * theta2;
         const theta6 = theta4 * theta2;
         const theta8 = theta4 * theta4;
         const thetaDistorted =
-          theta *
-          (1.0 + params.k1 * theta2 + params.k2 * theta4 + params.k3 * theta6 + params.k4 * theta8);
+          theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
         const rDistorted = std.tan(thetaDistorted);
+        const rScaled = rDistorted / p.zoom;
 
-        // Apply zoom
-        const rScaled = rDistorted / params.zoom;
-
-        // Convert back to texture coordinates
-        let distortedUv = centered;
+        let distortedUv = d.vec2f(centered.x, centered.y);
         if (r > 0.0001) {
-          distortedUv = centered.mul(rScaled / r);
+          distortedUv = d.vec2f(centered.x * (rScaled / r), centered.y * (rScaled / r));
         }
 
-        // Add center offset back and denormalize
-        const finalUv = distortedUv.add(d.vec2f(params.centerX, params.centerY)).mul(0.5).add(0.5);
+        const finalUv = distortedUv.add(d.vec2f(centerX, centerY)).mul(0.5).add(0.5);
 
-        // Sample from input texture if within bounds
         if (finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) {
-          const sampleCoord = d.vec2i(
-            d.i32(finalUv.x * d.f32(inputDims.x)),
-            d.i32(finalUv.y * d.f32(inputDims.y)),
-          );
-          const color = std.textureLoad(inputTex, sampleCoord, 0);
-          std.textureStore(outputTex, coord, color);
+          const sampleCoord = d.vec2i(d.i32(finalUv.x * inputW), d.i32(finalUv.y * inputH));
+          const color = std.textureLoad(fisheyeLayout.$.inputTexture, sampleCoord, 0);
+          std.textureStore(fisheyeLayout.$.outputTexture, coord, color);
         } else {
-          // Black for out of bounds
-          std.textureStore(outputTex, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
+          std.textureStore(fisheyeLayout.$.outputTexture, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
         }
       },
     );
@@ -218,6 +199,8 @@ export class Fisheye {
       zoom: this.config.zoom,
       width: this.config.width,
       height: this.config.height,
+      inputWidth: this.uniformInputWidth,
+      inputHeight: this.uniformInputHeight,
       padding: 0,
     };
   }
@@ -234,8 +217,7 @@ export class Fisheye {
 
   private async readbackToVideoFrame(
     device: GPUDevice,
-    root: TgpuRootType,
-    outputTexture: OutputTextureType,
+    outputTexture: GPUTexture,
     timestamp: number,
   ): Promise<VideoFrame> {
     const readbackBuffers = this.readbackBuffers;
@@ -244,8 +226,6 @@ export class Fisheye {
       throw new Error("Readback buffer not initialized");
     }
 
-    const outputGpuTexture = root.unwrap(outputTexture);
-    const commandEncoder = device.createCommandEncoder();
     const writeIndex = this.readbackIndex;
     const readIndex = 1 - writeIndex;
     const writeBuffer = readbackBuffers[writeIndex];
@@ -255,12 +235,14 @@ export class Fisheye {
       throw new Error("Readback buffer not initialized");
     }
 
+    const commandEncoder = device.createCommandEncoder();
     commandEncoder.copyTextureToBuffer(
-      { texture: outputGpuTexture },
+      { texture: outputTexture },
       { buffer: writeBuffer, bytesPerRow: this.readbackBytesPerRow },
       [this.config.width, this.config.height],
     );
     device.queue.submit([commandEncoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
 
     this.readbackHasData[writeIndex] = true;
     this.readbackIndex = readIndex;
@@ -294,16 +276,16 @@ export class Fisheye {
   }
 
   /**
-   * Create input texture with proper typing
+   * Create input texture (TypeGPU; per official docs: sampled + render for .write(image/VideoFrame)).
    */
   private createInputTexture(root: TgpuRootType, width: number, height: number): InputTextureType {
     const size: readonly [number, number] = [width, height];
     const format: "rgba8unorm" = "rgba8unorm";
-    return root["~unstable"].createTexture({ size, format }).$usage("sampled");
+    return root["~unstable"].createTexture({ size, format }).$usage("sampled", "render");
   }
 
   /**
-   * Create output texture with proper typing (storage only, no render needed for GPGPU)
+   * Create output storage texture (TypeGPU; type-safe with layout.$)
    */
   private createOutputTexture(
     root: TgpuRootType,
@@ -355,9 +337,6 @@ export class Fisheye {
     const root = this.root;
     const device = root.device;
 
-    let bindGroupDirty = false;
-
-    // Create or recreate input texture if dimensions changed
     if (
       !this.inputTexture ||
       this.inputTextureSize[0] !== frame.displayWidth ||
@@ -366,11 +345,9 @@ export class Fisheye {
       this.inputTexture?.destroy();
       this.inputTexture = this.createInputTexture(root, frame.displayWidth, frame.displayHeight);
       this.inputTextureSize = [frame.displayWidth, frame.displayHeight];
-      this.inputView = Fisheye.createInputView(this.inputTexture);
-      bindGroupDirty = true;
+      this.bindGroup = null;
     }
 
-    // Create or recreate output texture and readback buffer if config dimensions changed
     if (
       !this.outputTexture ||
       this.outputTextureSize[0] !== this.config.width ||
@@ -381,7 +358,6 @@ export class Fisheye {
       this.readbackBuffers?.[1]?.destroy();
 
       this.outputTexture = this.createOutputTexture(root, this.config.width, this.config.height);
-      this.outputView = Fisheye.createOutputView(this.outputTexture);
       this.readbackBytesPerRow = this.calculateBytesPerRow(this.config.width);
       this.readbackActualBytesPerRow = this.config.width * 4;
       this.pixelBuffer = new Uint8Array(this.config.width * this.config.height * 4);
@@ -392,20 +368,24 @@ export class Fisheye {
       this.readbackIndex = 0;
       this.readbackHasData = [false, false];
       this.outputTextureSize = [this.config.width, this.config.height];
-      bindGroupDirty = true;
+      this.bindGroup = null;
     }
 
-    // Capture for type narrowing
     const inputTexture = this.inputTexture;
     const outputTexture = this.outputTexture;
 
-    // Write VideoFrame to input texture
+    if (!inputTexture || !outputTexture) throw new Error("Textures not initialized");
+
     inputTexture.write(frame);
 
-    if (bindGroupDirty || !this.bindGroup) {
+    this.uniformInputWidth = frame.displayWidth;
+    this.uniformInputHeight = frame.displayHeight;
+    this.updateUniforms();
+
+    if (!this.bindGroup) {
       this.bindGroup = root.createBindGroup(fisheyeLayout, {
-        inputTexture: this.inputView ?? Fisheye.createInputView(inputTexture),
-        outputTexture: this.outputView ?? Fisheye.createOutputView(outputTexture),
+        inputTexture,
+        outputTexture,
         uniforms: this.uniformBuffer,
       });
     }
@@ -413,14 +393,14 @@ export class Fisheye {
     const bindGroup = this.bindGroup;
     const dewarpPipeline = this.dewarpPipeline;
 
-    if (!dewarpPipeline) {
-      throw new Error("Compute pipeline not initialized");
+    if (!dewarpPipeline || !outputTexture) {
+      throw new Error("Compute pipeline or output texture not initialized");
     }
 
-    // Execute the compute shader
     dewarpPipeline.with(bindGroup).dispatchThreads(this.config.width, this.config.height);
 
-    return this.readbackToVideoFrame(device, root, outputTexture, frame.timestamp);
+    const outputGpuTexture = root.unwrap(outputTexture);
+    return this.readbackToVideoFrame(device, outputGpuTexture, frame.timestamp);
   }
 
   /**
@@ -440,8 +420,6 @@ export class Fisheye {
       this.readbackIndex = 0;
       this.readbackHasData = [false, false];
       this.outputTextureSize = [0, 0];
-      this.outputView = null;
-      this.bindGroup = null;
       this.readbackBytesPerRow = 0;
       this.readbackActualBytesPerRow = 0;
       this.pixelBuffer = null;
@@ -465,8 +443,6 @@ export class Fisheye {
     this.readbackHasData = [false, false];
     this.uniformBuffer = null;
     this.root = null;
-    this.inputView = null;
-    this.outputView = null;
     this.bindGroup = null;
     this.dewarpPipeline = null;
     this.readbackBytesPerRow = 0;
