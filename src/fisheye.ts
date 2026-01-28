@@ -155,15 +155,22 @@ export class Fisheye {
         const centerY = p.centerY;
         const centered = uv.sub(d.vec2f(centerX, centerY));
         const r = std.length(centered);
+        // Scale r so output corner maps to fov/2, but cap so sampling stays inside input (theta_d <= sqrt(2)).
+        const cornerNorm = Math.SQRT2;
+        const fovRad = std.min(p.fov * 0.017453293, 3.1);
+        const scaleRaw = std.tan(fovRad * 0.5) / cornerNorm;
+        const scale = std.min(scaleRaw, 1.0);
+        const rScaledForFov = r * scale;
 
-        const theta = std.atan(r);
+        const theta = std.atan(rScaledForFov);
         const theta2 = theta * theta;
         const theta4 = theta2 * theta2;
         const theta6 = theta4 * theta2;
         const theta8 = theta4 * theta4;
+        // OpenCV fisheye: distorted normalized radius = θ_d. x' = (θ_d/r)*a => |(x',y')| = θ_d.
         const thetaDistorted =
           theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
-        const rDistorted = std.tan(thetaDistorted);
+        const rDistorted = thetaDistorted;
         const rScaled = rDistorted / p.zoom;
 
         let distortedUv = d.vec2f(centered.x, centered.y);

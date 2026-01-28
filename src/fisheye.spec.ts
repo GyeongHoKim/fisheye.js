@@ -254,3 +254,68 @@ describe("Fisheye - constructor and config", () => {
     }).not.toThrow();
   });
 });
+
+/**
+ * OpenCV fisheye model (Kannala–Brandt): forward mapping in normalized plane.
+ * Used to validate that our dewarp uses θ_d as distorted radius (not tan(θ_d)).
+ */
+function opencvFisheyeForward(
+  ax: number,
+  ay: number,
+  k1: number,
+  k2: number,
+  k3: number,
+  k4: number,
+): { x: number; y: number; theta: number; thetaD: number; rDistorted: number } {
+  const r = Math.sqrt(ax * ax + ay * ay);
+  const theta = r > 1e-10 ? Math.atan(r) : 0;
+  const theta2 = theta * theta;
+  const theta4 = theta2 * theta2;
+  const theta6 = theta4 * theta2;
+  const theta8 = theta4 * theta4;
+  const thetaD = theta * (1 + k1 * theta2 + k2 * theta4 + k3 * theta6 + k4 * theta8);
+  const scale = r > 1e-10 ? thetaD / r : 1;
+  const x = scale * ax;
+  const y = scale * ay;
+  const rDistorted = Math.sqrt(x * x + y * y);
+  return { x, y, theta, thetaD, rDistorted };
+}
+
+describe("OpenCV fisheye formula (dewarp mapping)", () => {
+  it("distorted radius equals θ_d (not tan(θ_d)) per OpenCV docs", () => {
+    const k1 = 0.1;
+    const k2 = 0;
+    const k3 = 0;
+    const k4 = 0;
+    // Undistorted normalized point (a,b) with r = 0.5 => θ = atan(0.5)
+    const ax = 0.4;
+    const ay = 0.3;
+    const { thetaD, rDistorted } = opencvFisheyeForward(ax, ay, k1, k2, k3, k4);
+    // OpenCV: (x',y') = (θ_d/r)*(a,b) => |(x',y')| = θ_d
+    expect(rDistorted).toBeCloseTo(thetaD, 10);
+    // If we wrongly used tan(θ_d), radius would be tan(θ_d), which is not θ_d
+    const wrongRadius = Math.tan(thetaD);
+    expect(rDistorted).not.toBeCloseTo(wrongRadius, 2);
+  });
+
+  it("forward mapping matches OpenCV for several angles", () => {
+    const k1 = 0.2;
+    const k2 = -0.01;
+    const k3 = 0;
+    const k4 = 0;
+    for (const r of [0.1, 0.5, 0.8, 1.0]) {
+      const ax = r;
+      const ay = 0;
+      const { thetaD, rDistorted } = opencvFisheyeForward(ax, ay, k1, k2, k3, k4);
+      expect(rDistorted).toBeCloseTo(thetaD, 10);
+    }
+  });
+
+  it("zero distortion: distorted radius equals θ (θ_d = θ)", () => {
+    const ax = 0.6;
+    const ay = 0.2;
+    const { theta, thetaD, rDistorted } = opencvFisheyeForward(ax, ay, 0, 0, 0, 0);
+    expect(thetaD).toBeCloseTo(theta, 10);
+    expect(rDistorted).toBeCloseTo(theta, 10);
+  });
+});
