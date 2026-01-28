@@ -1,44 +1,19 @@
 {
-  "description": "Woodscape front camera calibration data converted for fisheye.js",
-  "source": "woodscape",
-  "original": {
-    "extrinsic": {
-      "quaternion": [
-        0.5941767906169857, -0.5878843193897473, 0.3873184109007999, -0.3890121040340926
-      ],
-      "translation": [3.7484, 0.0, 0.6601699999999999]
-    },
-    "intrinsic": {
-      "aspect_ratio": 1.0,
-      "cx_offset": 3.942,
-      "cy_offset": -3.093,
-      "height": 966.0,
-      "k1": 339.749,
-      "k2": -31.988,
-      "k3": 48.275,
-      "k4": -7.201,
-      "model": "radial_poly",
-      "poly_order": 4,
-      "width": 1280.0
-    },
-    "name": "FV"
-  },
+  "description": "Demo calibration for OpenCV fisheye model (Kannala–Brandt). Use calibration from OpenCV cv::fisheye::calibrate or compatible source for real cameras.",
   "fisheyeOptions": {
-    "k1": 339.749,
-    "k2": -31.988,
-    "k3": 48.275,
-    "k4": -7.201,
+    "k1": 0.3,
+    "k2": 0,
+    "k3": 0,
+    "k4": 0,
     "width": 1280,
     "height": 966,
-    "centerX": 0.006159375,
-    "centerY": -0.006404968,
+    "centerX": 0,
+    "centerY": 0,
     "fov": 180,
     "zoom": 1.0
   },
   "notes": {
-    "centerX": "Converted from cx_offset (3.942 pixels) to normalized: (3.942 / 1280) * 2 = 0.006159375",
-    "centerY": "Converted from cy_offset (-3.093 pixels) to normalized: (-3.093 / 966) * 2 = -0.006404968",
-    "distortionModel": "radial_poly (4th order) - compatible with fisheye.js OpenCV model",
-    "imageDimensions": "1280x966 pixels"
+    "model": "OpenCV fisheye (theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8))",
+    "k1TypicalRange": "about -1.0 to 1.0 for OpenCV fisheye; do not use WoodScape/radial_poly coefficients (different model)"
   }
 }

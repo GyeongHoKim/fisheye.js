@@ -3,31 +3,28 @@ import { css, html, LitElement } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 import { WebGPURenderer } from "./renderer";
 
-interface CalibrationData {
-  fisheyeOptions: {
-    k1: number;
-    k2: number;
-    k3: number;
-    k4: number;
-    width: number;
-    height: number;
-    centerX: number;
-    centerY: number;
-    fov: number;
-    zoom: number;
-  };
-}
+// Defaults from OpenCV test_fisheye.cpp (opencv_extra fisheye testdata)
+const OPENCV_FISHEYE_DEFAULTS = {
+  k1: -0.0014613319981768,
+  k2: -0.00329861110580401,
+  k3: 0.00605760088590183,
+  k4: -0.00374209380722371,
+  centerX: -0.0306,
+  centerY: -0.0452,
+  fov: 180,
+  zoom: 1.0,
+};
 
 @customElement("fisheye-demo")
 export class FisheyeDemo extends LitElement {
-  @state() private k1 = 339.749;
-  @state() private k2 = -31.988;
-  @state() private k3 = 48.275;
-  @state() private k4 = -7.201;
-  @state() private fov = 180;
-  @state() private centerX = 0.006;
-  @state() private centerY = -0.006;
-  @state() private zoom = 1.0;
+  @state() private k1 = OPENCV_FISHEYE_DEFAULTS.k1;
+  @state() private k2 = OPENCV_FISHEYE_DEFAULTS.k2;
+  @state() private k3 = OPENCV_FISHEYE_DEFAULTS.k3;
+  @state() private k4 = OPENCV_FISHEYE_DEFAULTS.k4;
+  @state() private fov = OPENCV_FISHEYE_DEFAULTS.fov;
+  @state() private centerX = OPENCV_FISHEYE_DEFAULTS.centerX;
+  @state() private centerY = OPENCV_FISHEYE_DEFAULTS.centerY;
+  @state() private zoom = OPENCV_FISHEYE_DEFAULTS.zoom;
   @state() private isProcessing = false;
   @state() private errorMessage = "";
   @state() private hasWebGPU = true;
@@ -337,22 +334,7 @@ export class FisheyeDemo extends LitElement {
 
   private async loadDefaultImage() {
     try {
-      // Load default calibration data
-      const response = await fetch("/test.json");
-      const data: CalibrationData = await response.json();
-
-      // Apply default values from calibration
-      this.k1 = data.fisheyeOptions.k1;
-      this.k2 = data.fisheyeOptions.k2;
-      this.k3 = data.fisheyeOptions.k3;
-      this.k4 = data.fisheyeOptions.k4;
-      this.fov = data.fisheyeOptions.fov;
-      this.centerX = data.fisheyeOptions.centerX;
-      this.centerY = data.fisheyeOptions.centerY;
-      this.zoom = data.fisheyeOptions.zoom;
-
-      // Load default image
-      const imgResponse = await fetch("/test.jpg");
+      const imgResponse = await fetch(`/test.jpg?t=${Date.now()}`);
       const blob = await imgResponse.blob();
       await this.loadImage(blob);
     } catch (e) {
