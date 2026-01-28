@@ -95,6 +95,68 @@ Updates the dewarper configuration. You can update any subset of the original op
 
 Cleans up GPU resources. Call this when you're done using the dewarper.
 
+## Working with YUV Binary Data
+
+If you receive raw YUV binary data from a camera or server, you can use the `createVideoFrameFromYUV` utility to create a VideoFrame:
+
+```ts
+import { Fisheye, createVideoFrameFromYUV } from "@gyeonghokim/fisheye.js";
+
+const dewarper = new Fisheye({ distortion: 0.5, width: 1920, height: 1080 });
+
+// Example: Receiving NV12 data from a server
+const response = await fetch("/api/camera/frame");
+const yuvBuffer = await response.arrayBuffer();
+
+const frame = createVideoFrameFromYUV(new Uint8Array(yuvBuffer), {
+  format: "NV12",  // YUV format
+  width: 1920,
+  height: 1080,
+  timestamp: performance.now() * 1000,  // microseconds
+});
+
+const dewarpedFrame = await dewarper.dewarp(frame);
+frame.close();  // Don't forget to close the original frame
+```
+
+### `createVideoFrameFromYUV(data, options)`
+
+Creates a VideoFrame from YUV binary data.
+
+**Parameters:**
+
+- `data`: YUV binary data (`ArrayBuffer`, `TypedArray`, or `DataView`)
+- `options`: Configuration object
+  - `format` (required): YUV pixel format
+  - `width` (required): Frame width in pixels
+  - `height` (required): Frame height in pixels
+  - `timestamp` (required): Timestamp in microseconds
+  - `duration` (optional): Duration in microseconds
+  - `displayWidth` (optional): Display width (defaults to width)
+  - `displayHeight` (optional): Display height (defaults to height)
+  - `colorSpace` (optional): Color space configuration
+  - `transfer` (optional): If `true`, transfers buffer ownership for zero-copy performance
+
+**Supported YUV Formats:**
+
+| Format | Description | Data Size |
+|--------|-------------|-----------|
+| `I420` | YUV 4:2:0 planar (Y, U, V planes) | width × height × 1.5 |
+| `NV12` | YUV 4:2:0 semi-planar (Y plane, interleaved UV) | width × height × 1.5 |
+| `I420A` | YUV 4:2:0 planar with alpha | width × height × 2.5 |
+| `I422` | YUV 4:2:2 planar | width × height × 2 |
+| `I444` | YUV 4:4:4 planar | width × height × 3 |
+
+### `calculateYUVDataSize(format, width, height)`
+
+Calculates the expected byte size for YUV data.
+
+```ts
+import { calculateYUVDataSize } from "@gyeonghokim/fisheye.js";
+
+const size = calculateYUVDataSize("NV12", 1920, 1080);  // 3110400 bytes
+```
+
 ## Development
 
 This project uses:
