@@ -7,7 +7,10 @@ import type { FisheyeConfig, FisheyeOptions } from "./types";
  * Uniform struct for fisheye dewarping parameters
  */
 const FisheyeUniforms = d.struct({
-  distortion: d.f32,
+  k1: d.f32,
+  k2: d.f32,
+  k3: d.f32,
+  k4: d.f32,
   fov: d.f32,
   centerX: d.f32,
   centerY: d.f32,
@@ -83,8 +86,12 @@ export class Fisheye {
    * Apply default values to options
    */
   private applyDefaults(options: FisheyeOptions): FisheyeConfig {
+    const k1 = options.k1 ?? 0.5;
     return {
-      distortion: options.distortion ?? 0.5,
+      k1,
+      k2: options.k2 ?? 0,
+      k3: options.k3 ?? 0,
+      k4: options.k4 ?? 0,
       width: options.width ?? 640,
       height: options.height ?? 480,
       fov: options.fov ?? 180,
@@ -115,7 +122,10 @@ export class Fisheye {
    */
   private getUniformData(): d.Infer<typeof FisheyeUniforms> {
     return {
-      distortion: this.config.distortion,
+      k1: this.config.k1,
+      k2: this.config.k2,
+      k3: this.config.k3,
+      k4: this.config.k4,
       fov: this.config.fov,
       centerX: this.config.centerX,
       centerY: this.config.centerY,
@@ -258,18 +268,19 @@ export class Fisheye {
         const outputTex = fisheyeLayout.$.outputTexture;
         const params = fisheyeLayout.$.uniforms;
 
-        const dims = std.textureDimensions(inputTex);
+        const inputDims = std.textureDimensions(inputTex);
+        const outputDims = std.textureDimensions(outputTex);
         const coord = d.vec2i(x, y);
 
         // Early exit if outside texture bounds
-        if (x >= dims.x || y >= dims.y) {
+        if (x >= outputDims.x || y >= outputDims.y) {
           return;
         }
 
         // Normalize coordinates to [-1, 1]
         const uv = d.vec2f(
-          (d.f32(coord.x) / d.f32(dims.x) - 0.5) * 2.0,
-          (d.f32(coord.y) / d.f32(dims.y) - 0.5) * 2.0,
+          (d.f32(coord.x) / d.f32(outputDims.x) - 0.5) * 2.0,
+          (d.f32(coord.y) / d.f32(outputDims.y) - 0.5) * 2.0,
         );
 
         // Apply center offset
@@ -278,8 +289,16 @@ export class Fisheye {
         // Calculate radius from center
         const r = std.length(centered);
 
-        // Apply fisheye distortion correction: r' = r * (1 + k1 * r^2)
-        const rDistorted = r * (1.0 + params.distortion * r * r);
+        // Fisheye distortion (OpenCV model): theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8)
+        const theta = std.atan(r);
+        const theta2 = theta * theta;
+        const theta4 = theta2 * theta2;
+        const theta6 = theta4 * theta2;
+        const theta8 = theta4 * theta4;
+        const thetaDistorted =
+          theta *
+          (1.0 + params.k1 * theta2 + params.k2 * theta4 + params.k3 * theta6 + params.k4 * theta8);
+        const rDistorted = std.tan(thetaDistorted);
 
         // Apply zoom
         const rScaled = rDistorted / params.zoom;
@@ -296,8 +315,8 @@ export class Fisheye {
         // Sample from input texture if within bounds
         if (finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) {
           const sampleCoord = d.vec2i(
-            d.i32(finalUv.x * d.f32(dims.x)),
-            d.i32(finalUv.y * d.f32(dims.y)),
+            d.i32(finalUv.x * d.f32(inputDims.x)),
+            d.i32(finalUv.y * d.f32(inputDims.y)),
           );
           const color = std.textureLoad(inputTex, sampleCoord, 0);
           std.textureStore(outputTex, coord, color);

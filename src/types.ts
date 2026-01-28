@@ -3,13 +3,24 @@
  */
 export interface FisheyeOptions {
   /**
-   * Distortion coefficient (k1) for the fisheye lens
-   * Typical range: -1.0 to 1.0
-   * - Positive values: barrel distortion (fisheye effect)
-   * - Negative values: pincushion distortion
-   * - 0: no distortion
+   * Fisheye distortion coefficient k1.
    */
-  distortion?: number;
+  k1?: number;
+
+  /**
+   * Fisheye distortion coefficient k2.
+   */
+  k2?: number;
+
+  /**
+   * Fisheye distortion coefficient k3.
+   */
+  k3?: number;
+
+  /**
+   * Fisheye distortion coefficient k4.
+   */
+  k4?: number;
 
   /**
    * Canvas width for output
