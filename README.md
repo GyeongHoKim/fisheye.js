@@ -26,9 +26,7 @@ if you installed `@webgpu/types`,
 {
   "compilerOptions": {
     "types": ["@webgpu/types"]
-    // ...
   }
-  // ...
 }
 ```
 
