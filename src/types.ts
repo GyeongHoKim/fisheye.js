@@ -24,13 +24,13 @@ export interface FisheyeOptions {
 
   /**
    * Canvas width for output
-   * @default 640
+   * @default 300
    */
   width?: number;
 
   /**
    * Canvas height for output
-   * @default 480
+   * @default 150
    */
   height?: number;
 

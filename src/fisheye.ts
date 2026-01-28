@@ -105,14 +105,14 @@ export class Fisheye {
    * Apply default values to options
    */
   private applyDefaults(options: FisheyeOptions): FisheyeConfig {
-    const k1 = options.k1 ?? 0.5;
+    const k1 = options.k1 ?? 0;
     return {
       k1,
       k2: options.k2 ?? 0,
       k3: options.k3 ?? 0,
       k4: options.k4 ?? 0,
-      width: options.width ?? 640,
-      height: options.height ?? 480,
+      width: options.width ?? 300,
+      height: options.height ?? 150,
       fov: options.fov ?? 180,
       centerX: options.centerX ?? 0,
       centerY: options.centerY ?? 0,
