@@ -334,7 +334,7 @@ export class FisheyeDemo extends LitElement {
 
   private async loadDefaultImage() {
     try {
-      const imgResponse = await fetch(`/test.jpg?t=${Date.now()}`);
+      const imgResponse = await fetch(`${import.meta.env.BASE_URL}test.jpg?t=${Date.now()}`);
       const blob = await imgResponse.blob();
       await this.loadImage(blob);
     } catch (e) {
