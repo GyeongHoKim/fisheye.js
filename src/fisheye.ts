@@ -81,6 +81,9 @@ export class Fisheye {
     TgpuRootType["~unstable"]["createGuardedComputePipeline"]
   > | null = null;
   private readbackBuffer: GPUBuffer | null = null;
+  private readbackBytesPerRow = 0;
+  private readbackActualBytesPerRow = 0;
+  private pixelBuffer: Uint8Array | null = null;
   private inputTextureSize: [number, number] = [0, 0];
   private outputTextureSize: [number, number] = [0, 0];
 
@@ -315,6 +318,9 @@ export class Fisheye {
 
       this.outputTexture = this.createOutputTexture(root, this.config.width, this.config.height);
       this.outputView = Fisheye.createOutputView(this.outputTexture);
+      this.readbackBytesPerRow = this.calculateBytesPerRow(this.config.width);
+      this.readbackActualBytesPerRow = this.config.width * 4;
+      this.pixelBuffer = new Uint8Array(this.config.width * this.config.height * 4);
       this.readbackBuffer = this.createReadbackBuffer(
         device,
         this.config.width,
@@ -355,13 +361,12 @@ export class Fisheye {
     dewarpPipeline.with(bindGroup).dispatchThreads(this.config.width, this.config.height);
 
     // Copy texture to readback buffer for CPU access
-    const bytesPerRow = this.calculateBytesPerRow(this.config.width);
     const outputGpuTexture = root.unwrap(outputTexture);
 
     const commandEncoder = device.createCommandEncoder();
     commandEncoder.copyTextureToBuffer(
       { texture: outputGpuTexture },
-      { buffer: readbackBuffer, bytesPerRow },
+      { buffer: readbackBuffer, bytesPerRow: this.readbackBytesPerRow },
       [this.config.width, this.config.height],
     );
     device.queue.submit([commandEncoder.finish()]);
@@ -371,15 +376,17 @@ export class Fisheye {
     const mappedData = readbackBuffer.getMappedRange();
 
     // Create RGBA data array, handling row alignment
-    const bytesPerPixel = 4;
-    const actualBytesPerRow = this.config.width * bytesPerPixel;
-    const pixelData = new Uint8Array(this.config.width * this.config.height * bytesPerPixel);
+    const pixelData =
+      this.pixelBuffer ?? new Uint8Array(this.config.width * this.config.height * 4);
 
     const srcView = new Uint8Array(mappedData);
     for (let row = 0; row < this.config.height; row++) {
-      const srcOffset = row * bytesPerRow;
-      const dstOffset = row * actualBytesPerRow;
-      pixelData.set(srcView.subarray(srcOffset, srcOffset + actualBytesPerRow), dstOffset);
+      const srcOffset = row * this.readbackBytesPerRow;
+      const dstOffset = row * this.readbackActualBytesPerRow;
+      pixelData.set(
+        srcView.subarray(srcOffset, srcOffset + this.readbackActualBytesPerRow),
+        dstOffset,
+      );
     }
 
     readbackBuffer.unmap();
@@ -409,6 +416,9 @@ export class Fisheye {
       this.outputTextureSize = [0, 0];
       this.outputView = null;
       this.bindGroup = null;
+      this.readbackBytesPerRow = 0;
+      this.readbackActualBytesPerRow = 0;
+      this.pixelBuffer = null;
     }
   }
 
@@ -430,6 +440,9 @@ export class Fisheye {
     this.outputView = null;
     this.bindGroup = null;
     this.dewarpPipeline = null;
+    this.readbackBytesPerRow = 0;
+    this.readbackActualBytesPerRow = 0;
+    this.pixelBuffer = null;
     this.inputTextureSize = [0, 0];
     this.outputTextureSize = [0, 0];
   }
