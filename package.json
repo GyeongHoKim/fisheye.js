@@ -36,8 +36,7 @@
     "prepare": "husky",
     "release": "semantic-release",
     "example:dev": "npm run dev --prefix example",
-    "example:build": "npm run build --prefix example",
-    "example:deploy": "npm run deploy --prefix example"
+    "example:build": "npm run build --prefix example"
   },
   "keywords": [
     "fisheye",
