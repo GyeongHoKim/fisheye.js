@@ -1,13 +1,14 @@
 # fisheye.js
 
-Modern fisheye dewarping library for the web - successor to the original [fisheye.js](https://github.com/ericleong/fisheye.js)
+> Modern fisheye dewarping library for the web, using **General Purpose GPU**
 
-fisheye.js is a javascript library for drawing VideoFrame to the canvas with [simple radial lens distortion](<https://en.wikipedia.org/wiki/Distortion_(optics)>) using WebGPU(WebGL if your browser does not support WebGPU).
+fisheye.js is a javascript library for drawing VideoFrame to the canvas with [simple radial lens distortion](<https://en.wikipedia.org/wiki/Distortion_(optics)>) using **GPGPU** WebGPU(WebGL if your browser does not support WebGPU).
 
 ## Features
 
 - ESM support: You can just `import { Fisheye } from @gyeonghokim/fisheye.js;` in your WebAPP
 - TypeGPU: WebGPU backend with type-safe shader programing(with [typegpu](https://www.npmjs.com/package/typegpu))
+- GPGPU: we do not use canvas element, read from GPU buffer directly(efficient more than other libraries)
 - WebCodecs API: Modern Video processing with WebCodecs' [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)
 - Installation from modern package managers(npm)
 
