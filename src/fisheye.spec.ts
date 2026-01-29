@@ -80,6 +80,15 @@ describe("Fisheye - applyDefaults", () => {
       });
     }).not.toThrow();
   });
+
+  it("should accept projection and mount options", () => {
+    const fisheyeRect = new Fisheye({ projection: "rectilinear", mount: "ceiling" });
+    const fisheyeEqui = new Fisheye({ projection: "equirectangular", mount: "wall", fov: 180 });
+    expect(() => {
+      fisheyeRect.updateConfig({ projection: "equirectangular" });
+      fisheyeEqui.updateConfig({ mount: "desk", fov: 360 });
+    }).not.toThrow();
+  });
 });
 
 describe("Fisheye - getUniformData", () => {
