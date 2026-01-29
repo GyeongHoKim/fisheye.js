@@ -6,6 +6,10 @@ DEMO: https://gyeonghokim.github.io/fisheye.js/
 
 fisheye.js processes [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)s with **WebGPU compute shaders**—no canvas 2D—and corrects fisheye lens distortion using the **OpenCV fisheye model** (Kannala–Brandt–style polynomial in angle θ with coefficients k1–k4). This is the same model as in [OpenCV’s fisheye module](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html), not UCM (Unified Camera Model) or a simple radial model.
 
+## Learning Docs
+
+See the full educational curriculum in `doc/index.md`.
+
 ## Features
 
 - **WebGPU GPGPU**: Compute-shader pipeline via [TypeGPU](https://www.npmjs.com/package/typegpu); input/output as textures and readback to VideoFrame—no canvas element for dewarping
