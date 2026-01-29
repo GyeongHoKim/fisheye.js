@@ -1,3 +1,16 @@
+# [1.1.0](https://github.com/GyeongHoKim/fisheye.js/compare/v1.0.2...v1.1.0) (2026-01-29)
+
+
+### Bug Fixes
+
+* **buffer:** destroying readback buffer issue ([496b84e](https://github.com/GyeongHoKim/fisheye.js/commit/496b84e9acf0eb7f05d101f4e745dbf033976e62))
+
+
+### Features
+
+* **projection:** add projection logic ([cfc6843](https://github.com/GyeongHoKim/fisheye.js/commit/cfc6843fefedef589838fd2865cdd9d5c27ee50a))
+* **projection:** modify FisheyeOptions type ([1218b28](https://github.com/GyeongHoKim/fisheye.js/commit/1218b28f6951e828aaa4aab7dce305b8aaf3eed7))
+
 ## [1.0.2](https://github.com/GyeongHoKim/fisheye.js/compare/v1.0.1...v1.0.2) (2026-01-29)
 
 
