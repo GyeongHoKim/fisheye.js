@@ -28,6 +28,7 @@ export class FisheyeDemo extends LitElement {
   @state() private isProcessing = false;
   @state() private errorMessage = "";
   @state() private hasWebGPU = true;
+  @state() private controlsExpanded = false;
 
   @query("#output-canvas") private outputCanvas!: HTMLCanvasElement;
   @query("#input-canvas") private inputCanvas!: HTMLCanvasElement;
@@ -293,6 +294,7 @@ export class FisheyeDemo extends LitElement {
       color: #e0e0e0;
     }
 
+    /* Tablet and mobile: stack layout */
     @media (max-width: 900px) {
       .main {
         flex-direction: column;
@@ -300,13 +302,227 @@ export class FisheyeDemo extends LitElement {
 
       .controls {
         width: 100%;
+        max-height: none;
         border-right: none;
         border-bottom: 1px solid #0f3460;
+        overflow: visible;
+      }
+
+      .controls.collapsed {
+        padding: 0;
+      }
+
+      .controls.collapsed .controls-content {
+        display: none;
       }
 
       .canvas-container {
         flex-direction: column;
         align-items: center;
+      }
+    }
+
+    /* Mobile toggle button */
+    .controls-toggle {
+      display: none;
+      width: 100%;
+      padding: 1rem;
+      background: #16213e;
+      border: none;
+      border-bottom: 1px solid #0f3460;
+      color: #e0e0e0;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .controls-toggle .toggle-icon {
+      transition: transform 0.3s ease;
+    }
+
+    .controls-toggle .toggle-icon.expanded {
+      transform: rotate(180deg);
+    }
+
+    .controls-content {
+      padding: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .controls-toggle {
+        display: flex;
+      }
+
+      .controls {
+        padding: 0;
+      }
+
+      .controls-content {
+        padding: 1rem;
+      }
+    }
+
+    /* Small mobile screens */
+    @media (max-width: 600px) {
+      header {
+        padding: 0.75rem 1rem;
+      }
+
+      header h1 {
+        font-size: 1.25rem;
+      }
+
+      header p {
+        font-size: 0.75rem;
+      }
+
+      .controls-content {
+        padding: 1rem;
+      }
+
+      .control-group {
+        margin-bottom: 1rem;
+      }
+
+      .control-group h3 {
+        font-size: 0.7rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .control-item {
+        margin-bottom: 0.75rem;
+      }
+
+      .control-item label {
+        font-size: 0.8rem;
+      }
+
+      /* Larger touch targets for sliders */
+      input[type="range"] {
+        height: 8px;
+        padding: 8px 0;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        width: 24px;
+        height: 24px;
+      }
+
+      .file-input-label {
+        padding: 1rem;
+        font-size: 1rem;
+      }
+
+      .btn {
+        padding: 1rem;
+        font-size: 1rem;
+      }
+
+      .canvas-area {
+        padding: 1rem;
+        gap: 0.75rem;
+      }
+
+      .canvas-container {
+        gap: 1rem;
+        width: 100%;
+      }
+
+      .canvas-wrapper {
+        width: 100%;
+      }
+
+      .canvas-wrapper h4 {
+        font-size: 0.7rem;
+      }
+
+      #input-canvas,
+      #output-canvas {
+        max-width: 100%;
+        width: 100%;
+      }
+
+      #input-canvas {
+        max-width: 100%;
+      }
+
+      #output-canvas {
+        max-width: 100%;
+      }
+    }
+
+    /* Very small screens */
+    @media (max-width: 400px) {
+      header h1 {
+        font-size: 1.1rem;
+      }
+
+      .control-item label {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+      }
+
+      .control-item label span {
+        font-size: 0.75rem;
+      }
+    }
+
+    /* Landscape mobile optimization */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .container {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      header {
+        padding: 0.5rem 1rem;
+      }
+
+      header h1 {
+        font-size: 1rem;
+      }
+
+      header p {
+        display: none;
+      }
+
+      .main {
+        flex-direction: row;
+      }
+
+      .controls {
+        width: 280px;
+        max-height: calc(100vh - 50px);
+        overflow-y: auto;
+      }
+
+      .controls-toggle {
+        display: none;
+      }
+
+      .controls-content {
+        display: block !important;
+        padding: 0.75rem;
+      }
+
+      .control-group {
+        margin-bottom: 0.75rem;
+      }
+
+      .control-item {
+        margin-bottom: 0.5rem;
+      }
+
+      .canvas-area {
+        padding: 0.5rem;
+      }
+
+      .canvas-container {
+        flex-direction: row;
+        gap: 0.5rem;
       }
     }
   `;
@@ -450,6 +666,10 @@ export class FisheyeDemo extends LitElement {
     this.loadDefaultImage();
   }
 
+  private toggleControls() {
+    this.controlsExpanded = !this.controlsExpanded;
+  }
+
   render() {
     return html`
       <div class="container">
@@ -459,7 +679,12 @@ export class FisheyeDemo extends LitElement {
         </header>
 
         <div class="main">
-          <aside class="controls">
+          <aside class="controls ${this.controlsExpanded ? "" : "collapsed"}">
+            <button class="controls-toggle" @click=${this.toggleControls}>
+              <span>Controls</span>
+              <span class="toggle-icon ${this.controlsExpanded ? "expanded" : ""}">▼</span>
+            </button>
+            <div class="controls-content">
             ${
               this.errorMessage && !this.hasWebGPU
                 ? html`<div class="error">${this.errorMessage}</div>`
@@ -502,6 +727,7 @@ export class FisheyeDemo extends LitElement {
                   </div>
                 `
             }
+            </div>
           </aside>
 
           <div class="canvas-area">
