@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/GyeongHoKim/fisheye.js/compare/v1.0.1...v1.0.2) (2026-01-29)
+
+
+### Bug Fixes
+
+* **example:** align fisheye k1–k4 slider ranges with OpenCV model ([4cb8457](https://github.com/GyeongHoKim/fisheye.js/commit/4cb845774d0d152ffdd212e781556dd0c30f3f7a))
+
 ## [1.0.1](https://github.com/GyeongHoKim/fisheye.js/compare/v1.0.0...v1.0.1) (2026-01-28)
 
 
