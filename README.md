@@ -53,6 +53,8 @@ const dewarper = new Fisheye({
   width: 1920,
   height: 1080,
   fov: 180, // Field of view in degrees
+  projection: "rectilinear", // "rectilinear" | "equirectangular"
+  mount: "ceiling", // "ceiling" | "wall" | "desk"
   centerX: 0, // X offset of lens center (-1.0 to 1.0)
   centerY: 0, // Y offset of lens center (-1.0 to 1.0)
   zoom: 1.0, // Zoom factor
@@ -80,7 +82,9 @@ Creates a new Fisheye dewarper instance.
 - `k4` (number, optional): Fisheye distortion coefficient k4. Default: `0`.
 - `width` (number, optional): Output frame width. Default: `300`
 - `height` (number, optional): Output frame height. Default: `150`
-- `fov` (number, optional): Field of view in degrees. Default: `180`
+- `fov` (number, optional): Field of view in degrees. For rectilinear: angular diameter of the output. For equirectangular: horizontal span. Default: `180`
+- `projection` (`"rectilinear"` | `"equirectangular"`, optional): How corrected ray directions are mapped to the output. **rectilinear**: standard perspective (straight lines stay straight). **equirectangular**: horizontal = azimuth, vertical = elevation (panoramic strip). Default: `"rectilinear"`
+- `mount` (`"ceiling"` | `"wall"` | `"desk"`, optional): Camera mount position; can affect default FOV or valid range when projection is equirectangular. Default: `"ceiling"`
 - `centerX` (number, optional): X offset of the lens center (normalized, -1.0 to 1.0). Default: `0`
 - `centerY` (number, optional): Y offset of the lens center (normalized, -1.0 to 1.0). Default: `0`
 - `zoom` (number, optional): Zoom factor. Default: `1.0`
