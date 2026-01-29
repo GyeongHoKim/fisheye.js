@@ -437,11 +437,13 @@ export class Fisheye {
    * Update configuration
    */
   updateConfig(options: Partial<FisheyeOptions>): void {
+    const prevWidth = this.config.width;
+    const prevHeight = this.config.height;
     this.config = this.applyDefaults({ ...this.config, ...options });
     this.updateUniforms();
 
-    // Recreate output texture and readback buffer if size changed
-    if (options.width || options.height) {
+    // Recreate output texture and readback buffer only when size actually changed
+    if (this.config.width !== prevWidth || this.config.height !== prevHeight) {
       this.outputTexture?.destroy();
       this.readbackBuffers?.[0]?.destroy();
       this.readbackBuffers?.[1]?.destroy();
