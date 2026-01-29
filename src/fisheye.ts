@@ -110,6 +110,8 @@ export class Fisheye {
       width: options.width ?? 300,
       height: options.height ?? 150,
       fov: options.fov ?? 180,
+      projection: options.projection ?? "rectilinear",
+      mount: options.mount ?? "ceiling",
       centerX: options.centerX ?? 0,
       centerY: options.centerY ?? 0,
       zoom: options.zoom ?? 1.0,
