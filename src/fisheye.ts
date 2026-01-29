@@ -19,6 +19,7 @@ const FisheyeUniforms = d.struct({
   height: d.f32,
   inputWidth: d.f32,
   inputHeight: d.f32,
+  projection: d.f32, // 0 = rectilinear, 1 = equirectangular
   padding: d.f32,
 });
 
@@ -64,12 +65,13 @@ type UniformBufferType = TgpuBuffer<typeof FisheyeUniforms> & {
  * @example
  * ```ts
  * const dewarper = new Fisheye({
- *   distortion: 0.5,
  *   width: 1920,
  *   height: 1080,
+ *   fov: 180,
+ *   projection: "rectilinear",
  * });
  *
- * const dewarpedFrame = await dewarper.dewarp(videoFrame);
+ * const dewarpedFrame = await dewarper.dewarp(inputVideoFrame);
  * ```
  */
 export class Fisheye {
@@ -148,39 +150,57 @@ export class Fisheye {
           return;
         }
 
-        const uv = d.vec2f(
-          (d.f32(coord.x) / outputW - 0.5) * 2.0,
-          (d.f32(coord.y) / outputH - 0.5) * 2.0,
-        );
-
         const centerX = p.centerX;
         const centerY = p.centerY;
-        const centered = uv.sub(d.vec2f(centerX, centerY));
-        const r = std.length(centered);
-        // Scale r so output corner maps to fov/2, but cap so sampling stays inside input (theta_d <= sqrt(2)).
-        const cornerNorm = Math.SQRT2;
-        const fovRad = std.min(p.fov * 0.017453293, 3.1);
-        const scaleRaw = std.tan(fovRad * 0.5) / cornerNorm;
-        const scale = std.min(scaleRaw, 1.0);
-        const rScaledForFov = r * scale;
+        let finalUv = d.vec2f(0.0, 0.0);
 
-        const theta = std.atan(rScaledForFov);
-        const theta2 = theta * theta;
-        const theta4 = theta2 * theta2;
-        const theta6 = theta4 * theta2;
-        const theta8 = theta4 * theta4;
-        // OpenCV fisheye: distorted normalized radius = θ_d. x' = (θ_d/r)*a => |(x',y')| = θ_d.
-        const thetaDistorted =
-          theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
-        const rDistorted = thetaDistorted;
-        const rScaled = rDistorted / p.zoom;
+        if (p.projection < 0.5) {
+          // Rectilinear: output pixel → normalized direction → θ → r_d → input UV
+          const uv = d.vec2f(
+            (d.f32(coord.x) / outputW - 0.5) * 2.0,
+            (d.f32(coord.y) / outputH - 0.5) * 2.0,
+          );
+          const centered = uv.sub(d.vec2f(centerX, centerY));
+          const r = std.length(centered);
+          const cornerNorm = Math.SQRT2;
+          const fovRad = std.min(p.fov * (Math.PI / 180), 3.1);
+          const scaleRaw = std.tan(fovRad * 0.5) / cornerNorm;
+          const scale = std.min(scaleRaw, 1.0);
+          const rScaledForFov = r * scale;
 
-        let distortedUv = d.vec2f(centered.x, centered.y);
-        if (r > 0.0001) {
-          distortedUv = d.vec2f(centered.x * (rScaled / r), centered.y * (rScaled / r));
+          const theta = std.atan(rScaledForFov);
+          const theta2 = theta * theta;
+          const theta4 = theta2 * theta2;
+          const theta6 = theta4 * theta2;
+          const theta8 = theta4 * theta4;
+          const thetaDistorted =
+            theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
+          const rDistorted = thetaDistorted;
+          const rScaled = rDistorted / p.zoom;
+
+          let distortedUv = d.vec2f(centered.x, centered.y);
+          if (r > 0.0001) {
+            distortedUv = d.vec2f(centered.x * (rScaled / r), centered.y * (rScaled / r));
+          }
+          finalUv = distortedUv.add(d.vec2f(centerX, centerY)).mul(0.5).add(0.5);
+        } else {
+          // Equirectangular: output (x,y) → lon, lat → θ (angle from optical axis) → r_d → input UV
+          const fovRad = p.fov * (Math.PI / 180);
+          const lon = (d.f32(coord.x) / outputW - 0.5) * fovRad;
+          const lat = (d.f32(coord.y) / outputH - 0.5) * Math.PI;
+          const sinLat = std.sin(lat);
+          const theta = std.acos(std.min(std.max(sinLat, -1.0), 1.0));
+          const theta2 = theta * theta;
+          const theta4 = theta2 * theta2;
+          const theta6 = theta4 * theta2;
+          const theta8 = theta4 * theta4;
+          const rDistorted =
+            theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
+          const rScaled = rDistorted / p.zoom;
+          const uNorm = centerX + rScaled * std.cos(lon);
+          const vNorm = centerY + rScaled * std.sin(lon);
+          finalUv = d.vec2f(uNorm * 0.5 + 0.5, vNorm * 0.5 + 0.5);
         }
-
-        const finalUv = distortedUv.add(d.vec2f(centerX, centerY)).mul(0.5).add(0.5);
 
         if (finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) {
           const sampleCoord = d.vec2i(d.i32(finalUv.x * inputW), d.i32(finalUv.y * inputH));
@@ -210,6 +230,7 @@ export class Fisheye {
       height: this.config.height,
       inputWidth: this.uniformInputWidth,
       inputHeight: this.uniformInputHeight,
+      projection: this.config.projection === "equirectangular" ? 1 : 0,
       padding: 0,
     };
   }
