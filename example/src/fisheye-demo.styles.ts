@@ -63,6 +63,13 @@ export const fisheyeDemoStyles = css`
     color: #00d9ff;
   }
 
+  .control-hint {
+    margin: 0 0 0.5rem;
+    font-size: 0.7rem;
+    color: #666;
+    line-height: 1.3;
+  }
+
   .control-item {
     margin-bottom: 1rem;
   }

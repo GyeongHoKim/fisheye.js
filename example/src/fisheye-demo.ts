@@ -219,10 +219,11 @@ export class FisheyeDemo extends LitElement {
 
                   <div class="control-group">
                     <h3>Distortion Coefficients</h3>
-                    ${this.renderSlider("k1", this.k1, -500, 500, 0.001)}
-                    ${this.renderSlider("k2", this.k2, -100, 100, 0.001)}
-                    ${this.renderSlider("k3", this.k3, -100, 100, 0.001)}
-                    ${this.renderSlider("k4", this.k4, -50, 50, 0.001)}
+                    <p class="control-hint">OpenCV fisheye: θ_d = θ(1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸). Typical |k| &lt; 0.1.</p>
+                    ${this.renderSlider("k1", this.k1, -0.1, 0.1, 0.0001)}
+                    ${this.renderSlider("k2", this.k2, -0.1, 0.1, 0.0001)}
+                    ${this.renderSlider("k3", this.k3, -0.1, 0.1, 0.0001)}
+                    ${this.renderSlider("k4", this.k4, -0.1, 0.1, 0.0001)}
                   </div>
 
                   <div class="control-group">
@@ -281,7 +282,7 @@ export class FisheyeDemo extends LitElement {
       <div class="control-item">
         <label>
           ${name}
-          <span>${value.toFixed(step < 1 ? 3 : 0)}</span>
+          <span>${value.toFixed(step <= 0.0001 ? 4 : step < 1 ? 3 : 0)}</span>
         </label>
         <input
           type="range"
