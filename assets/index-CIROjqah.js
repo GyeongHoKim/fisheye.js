@@ -263,6 +263,13 @@ ${n}`),{code:n,usedBindGroupLayouts:s,catchall:p,logResources:r.logResources}}fu
     color: #00d9ff;
   }
 
+  .control-hint {
+    margin: 0 0 0.5rem;
+    font-size: 0.7rem;
+    color: #666;
+    line-height: 1.3;
+  }
+
   .control-item {
     margin-bottom: 1rem;
   }
@@ -761,10 +768,11 @@ ${n}`),{code:n,usedBindGroupLayouts:s,catchall:p,logResources:r.logResources}}fu
 
                   <div class="control-group">
                     <h3>Distortion Coefficients</h3>
-                    ${this.renderSlider("k1",this.k1,-500,500,.001)}
-                    ${this.renderSlider("k2",this.k2,-100,100,.001)}
-                    ${this.renderSlider("k3",this.k3,-100,100,.001)}
-                    ${this.renderSlider("k4",this.k4,-50,50,.001)}
+                    <p class="control-hint">OpenCV fisheye: θ_d = θ(1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸). Typical |k| &lt; 0.1.</p>
+                    ${this.renderSlider("k1",this.k1,-.1,.1,1e-4)}
+                    ${this.renderSlider("k2",this.k2,-.1,.1,1e-4)}
+                    ${this.renderSlider("k3",this.k3,-.1,.1,1e-4)}
+                    ${this.renderSlider("k4",this.k4,-.1,.1,1e-4)}
                   </div>
 
                   <div class="control-group">
@@ -810,7 +818,7 @@ ${n}`),{code:n,usedBindGroupLayouts:s,catchall:p,logResources:r.logResources}}fu
       <div class="control-item">
         <label>
           ${e}
-          <span>${t.toFixed(i<1?3:0)}</span>
+          <span>${t.toFixed(i<=1e-4?4:i<1?3:0)}</span>
         </label>
         <input
           type="range"
