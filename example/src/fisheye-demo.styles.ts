@@ -15,47 +15,41 @@ export const fisheyeDemoStyles = css`
     height: 100vh;
   }
 
-  header {
-    padding: 1rem 2rem;
-    background: #16213e;
-    border-bottom: 1px solid #0f3460;
-  }
-
-  header h1 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    background: linear-gradient(90deg, #00d9ff, #00ff88);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  header p {
-    margin: 0.25rem 0 0;
-    font-size: 0.875rem;
-    color: #8892b0;
-  }
-
   .main {
     display: flex;
     flex: 1;
     overflow: hidden;
   }
 
-  .controls {
-    width: 320px;
-    padding: 1.5rem;
+  .sidebar-container {
+    display: flex;
+    flex-shrink: 0;
     background: #16213e;
-    overflow-y: auto;
     border-right: 1px solid #0f3460;
   }
 
-  .control-group {
+  .sidebar-form {
+    width: 320px;
+    padding: 1.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+  }
+
+  .sidebar-form.closed {
+    width: 0;
+    padding: 0;
+    min-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .sidebar-form .control-group {
     margin-bottom: 1.5rem;
   }
 
-  .control-group h3 {
+  .sidebar-form .control-group h3 {
     margin: 0 0 0.75rem;
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -63,18 +57,18 @@ export const fisheyeDemoStyles = css`
     color: #00d9ff;
   }
 
-  .control-hint {
+  .sidebar-form .control-hint {
     margin: 0 0 0.5rem;
     font-size: 0.7rem;
     color: #666;
     line-height: 1.3;
   }
 
-  .control-item {
+  .sidebar-form .control-item {
     margin-bottom: 1rem;
   }
 
-  .control-item label {
+  .sidebar-form .control-item label {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -83,12 +77,12 @@ export const fisheyeDemoStyles = css`
     color: #a0a0a0;
   }
 
-  .control-item label span {
+  .sidebar-form .control-item label span {
     font-family: monospace;
     color: #00ff88;
   }
 
-  input[type="range"] {
+  .sidebar-form input[type="range"] {
     width: 100%;
     height: 6px;
     background: #0f3460;
@@ -97,41 +91,20 @@ export const fisheyeDemoStyles = css`
     -webkit-appearance: none;
   }
 
-  input[type="range"]::-webkit-slider-thumb {
+  .sidebar-form input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
     background: #00d9ff;
     border-radius: 50%;
     cursor: pointer;
-    transition: background 0.15s;
   }
 
-  input[type="range"]::-webkit-slider-thumb:hover {
-    background: #00ff88;
-  }
-
-  input[type="number"] {
-    width: 100%;
-    padding: 0.5rem;
-    background: #0f3460;
-    border: 1px solid #1a3a5c;
-    border-radius: 4px;
-    color: #e0e0e0;
-    font-family: monospace;
-    font-size: 0.875rem;
-  }
-
-  input[type="number"]:focus {
-    outline: none;
-    border-color: #00d9ff;
-  }
-
-  .file-input-wrapper {
+  .sidebar-form .file-input-wrapper {
     position: relative;
   }
 
-  .file-input-wrapper input[type="file"] {
+  .sidebar-form .file-input-wrapper input[type="file"] {
     position: absolute;
     opacity: 0;
     width: 100%;
@@ -139,7 +112,7 @@ export const fisheyeDemoStyles = css`
     cursor: pointer;
   }
 
-  .file-input-label {
+  .sidebar-form .file-input-label {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -153,9 +126,55 @@ export const fisheyeDemoStyles = css`
     transition: all 0.2s;
   }
 
-  .file-input-wrapper:hover .file-input-label {
+  .sidebar-form .file-input-wrapper:hover .file-input-label {
     border-color: #00d9ff;
     color: #00d9ff;
+  }
+
+  .sidebar-form .preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .sidebar-form .preset-btn {
+    padding: 0.5rem 0.75rem;
+    background: #0f3460;
+    border: 1px solid #1a3a5c;
+    border-radius: 6px;
+    color: #a0a0a0;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .sidebar-form .preset-btn:hover {
+    border-color: #00d9ff;
+    color: #00d9ff;
+  }
+
+  .sidebar-form .preset-btn.active {
+    background: #00d9ff;
+    border-color: #00d9ff;
+    color: #1a1a2e;
+  }
+
+  .sidebar-form .btn {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #00d9ff, #00ff88);
+    border: none;
+    border-radius: 8px;
+    color: #1a1a2e;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .sidebar-form .btn-secondary {
+    background: #0f3460;
+    color: #e0e0e0;
   }
 
   .canvas-area {
@@ -239,53 +258,22 @@ export const fisheyeDemoStyles = css`
     }
   }
 
-  .btn {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: linear-gradient(135deg, #00d9ff, #00ff88);
-    border: none;
-    border-radius: 8px;
-    color: #1a1a2e;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.2s;
-  }
-
-  .btn:hover {
-    opacity: 0.9;
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary {
-    background: #0f3460;
-    color: #e0e0e0;
-  }
-
   /* Tablet and mobile: stack layout */
   @media (max-width: 900px) {
     .main {
       flex-direction: column;
     }
 
-    .controls {
-      width: 100%;
-      max-height: none;
+    .sidebar-container {
+      flex-direction: column;
       border-right: none;
       border-bottom: 1px solid #0f3460;
-      overflow: visible;
+      max-height: 50vh;
+      overflow: hidden;
     }
 
-    .controls.collapsed {
-      padding: 0;
-    }
-
-    .controls.collapsed .controls-content {
-      display: none;
+    .sidebar-form.closed {
+      max-height: 0;
     }
 
     .canvas-container {
@@ -294,104 +282,8 @@ export const fisheyeDemoStyles = css`
     }
   }
 
-  /* Mobile toggle button */
-  .controls-toggle {
-    display: none;
-    width: 100%;
-    padding: 1rem;
-    background: #16213e;
-    border: none;
-    border-bottom: 1px solid #0f3460;
-    color: #e0e0e0;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .controls-toggle .toggle-icon {
-    transition: transform 0.3s ease;
-  }
-
-  .controls-toggle .toggle-icon.expanded {
-    transform: rotate(180deg);
-  }
-
-  .controls-content {
-    padding: 1.5rem;
-  }
-
-  @media (max-width: 900px) {
-    .controls-toggle {
-      display: flex;
-    }
-
-    .controls {
-      padding: 0;
-    }
-
-    .controls-content {
-      padding: 1rem;
-    }
-  }
-
   /* Small mobile screens */
   @media (max-width: 600px) {
-    header {
-      padding: 0.75rem 1rem;
-    }
-
-    header h1 {
-      font-size: 1.25rem;
-    }
-
-    header p {
-      font-size: 0.75rem;
-    }
-
-    .controls-content {
-      padding: 1rem;
-    }
-
-    .control-group {
-      margin-bottom: 1rem;
-    }
-
-    .control-group h3 {
-      font-size: 0.7rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .control-item {
-      margin-bottom: 0.75rem;
-    }
-
-    .control-item label {
-      font-size: 0.8rem;
-    }
-
-    /* Larger touch targets for sliders */
-    input[type="range"] {
-      height: 8px;
-      padding: 8px 0;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      width: 24px;
-      height: 24px;
-    }
-
-    .file-input-label {
-      padding: 1rem;
-      font-size: 1rem;
-    }
-
-    .btn {
-      padding: 1rem;
-      font-size: 1rem;
-    }
-
     .canvas-area {
       padding: 1rem;
       gap: 0.75rem;
@@ -425,19 +317,14 @@ export const fisheyeDemoStyles = css`
     }
   }
 
-  /* Very small screens */
   @media (max-width: 400px) {
-    header h1 {
-      font-size: 1.1rem;
-    }
-
-    .control-item label {
+    .sidebar-form .control-item label {
       flex-direction: column;
       align-items: flex-start;
       gap: 0.25rem;
     }
 
-    .control-item label span {
+    .sidebar-form .control-item label span {
       font-size: 0.75rem;
     }
   }
@@ -449,43 +336,8 @@ export const fisheyeDemoStyles = css`
       min-height: 100vh;
     }
 
-    header {
-      padding: 0.5rem 1rem;
-    }
-
-    header h1 {
-      font-size: 1rem;
-    }
-
-    header p {
-      display: none;
-    }
-
     .main {
       flex-direction: row;
-    }
-
-    .controls {
-      width: 280px;
-      max-height: calc(100vh - 50px);
-      overflow-y: auto;
-    }
-
-    .controls-toggle {
-      display: none;
-    }
-
-    .controls-content {
-      display: block !important;
-      padding: 0.75rem;
-    }
-
-    .control-group {
-      margin-bottom: 0.75rem;
-    }
-
-    .control-item {
-      margin-bottom: 0.5rem;
     }
 
     .canvas-area {
