@@ -71,6 +71,11 @@ export class FisheyeDemo extends LitElement {
   private renderer: WebGPURenderer | null = null;
   private currentImageBitmap: ImageBitmap | null = null;
 
+  private processImagePromise: Promise<void> = Promise.resolve();
+  private processImageDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private static readonly PROCESS_IMAGE_DEBOUNCE_MS = 200;
+
   static styles = fisheyeDemoStyles;
 
   connectedCallback() {
@@ -81,6 +86,10 @@ export class FisheyeDemo extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    if (this.processImageDebounceTimer !== null) {
+      clearTimeout(this.processImageDebounceTimer);
+      this.processImageDebounceTimer = null;
+    }
     this.fisheye?.destroy();
     this.renderer?.destroy();
     this.currentImageBitmap?.close();
@@ -118,8 +127,8 @@ export class FisheyeDemo extends LitElement {
         ctx.drawImage(this.currentImageBitmap, 0, 0);
       }
 
-      // Process the image
-      await this.processImage();
+      // Process the image (serialized with any pending run)
+      await this.enqueueProcessImage();
     } catch (e) {
       this.errorMessage = `Failed to load image: ${e}`;
     }
@@ -196,20 +205,45 @@ export class FisheyeDemo extends LitElement {
     }
   }
 
-  private handleParamChange(param: string, value: number) {
-    (this as unknown as Record<string, number>)[param] = value;
-    this.processImage();
+  /** Enqueue processImage so only one run is in flight; returns the promise for that run. */
+  private enqueueProcessImage(): Promise<void> {
+    const prev = this.processImagePromise;
+    this.processImagePromise = prev.then(() => this.processImage()).catch(() => {});
+    return this.processImagePromise;
   }
 
-  private handlePresetChange(id: PresetId) {
+  private scheduleProcessImageDebounced(): void {
+    if (this.processImageDebounceTimer !== null) {
+      clearTimeout(this.processImageDebounceTimer);
+    }
+    this.processImageDebounceTimer = setTimeout(() => {
+      this.processImageDebounceTimer = null;
+      this.enqueueProcessImage();
+    }, FisheyeDemo.PROCESS_IMAGE_DEBOUNCE_MS);
+  }
+
+  private cancelProcessImageDebounce(): void {
+    if (this.processImageDebounceTimer !== null) {
+      clearTimeout(this.processImageDebounceTimer);
+      this.processImageDebounceTimer = null;
+    }
+  }
+
+  private handleParamChange(param: string, value: number) {
+    (this as unknown as Record<string, number>)[param] = value;
+    this.scheduleProcessImageDebounced();
+  }
+
+  private async handlePresetChange(id: PresetId) {
     const preset = VIEW_PRESETS.find((p) => p.id === id);
     if (!preset) return;
+    this.cancelProcessImageDebounce();
     this.presetId = preset.id;
     this.projection = preset.projection;
     this.mount = preset.mount;
     this.fov = preset.fov;
     this.fisheye = null;
-    this.processImage();
+    await this.enqueueProcessImage();
   }
 
   private handleSidebarToggle() {
