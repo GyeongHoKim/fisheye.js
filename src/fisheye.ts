@@ -275,12 +275,32 @@ export class Fisheye {
         return;
       }
 
-      // Original projection (pass-through)
+      // Original projection (pass-through with bilinear interpolation)
       if (p.projection >= 1.5) {
-        const u = coordXf / outputW;
-        const v = coordYf / outputH;
-        const sampleCoord = d.vec2i(d.i32(u * inputW), d.i32(v * inputH));
-        const color = std.textureLoad(fisheyeLayout.$.inputTexture, sampleCoord, 0);
+        const srcX = (coordXf / outputW) * inputW;
+        const srcY = (coordYf / outputH) * inputH;
+
+        const x0 = std.floor(srcX);
+        const y0 = std.floor(srcY);
+        const fx = srcX - x0;
+        const fy = srcY - y0;
+
+        const maxX = inputW - 1.0;
+        const maxY = inputH - 1.0;
+        const ix0 = d.i32(std.clamp(x0, 0.0, maxX));
+        const iy0 = d.i32(std.clamp(y0, 0.0, maxY));
+        const ix1 = d.i32(std.clamp(x0 + 1.0, 0.0, maxX));
+        const iy1 = d.i32(std.clamp(y0 + 1.0, 0.0, maxY));
+
+        const c00 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy0), 0);
+        const c10 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy0), 0);
+        const c01 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy1), 0);
+        const c11 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy1), 0);
+
+        const c0 = std.mix(c00, c10, fx);
+        const c1 = std.mix(c01, c11, fx);
+        const color = std.mix(c0, c1, fy);
+
         std.textureStore(fisheyeLayout.$.outputTexture, coord, color);
         return;
       }
@@ -288,6 +308,7 @@ export class Fisheye {
       // Step 1: Projection → normalized coordinates
       let normX = (coordXf - p.newCx) / p.newFx;
       let normY = (coordYf - p.newCy) / p.newFy;
+      let validProjection = true;
 
       // Equirectangular projection
       if (p.projection >= 0.5) {
@@ -297,9 +318,16 @@ export class Fisheye {
         const dirX = std.sin(lon) * cosLat;
         const dirY = std.sin(lat);
         const dirZ = std.cos(lon) * cosLat;
-        const safeZ = std.max(dirZ, 0.001);
-        normX = dirX / safeZ;
-        normY = dirY / safeZ;
+
+        // Back hemisphere (dir_z <= 0) cannot be mapped from fisheye
+        if (dirZ <= 0.001) {
+          validProjection = false;
+          normX = 0.0;
+          normY = 0.0;
+        } else {
+          normX = dirX / dirZ;
+          normY = dirY / dirZ;
+        }
       }
 
       // Step 2: Apply fisheye distortion (OpenCV forward model)
@@ -318,14 +346,37 @@ export class Fisheye {
       // Step 3: Convert to input pixel coordinates
       const u = p.fx * distortedX + p.cx;
       const v = p.fy * distortedY + p.cy;
-      const finalU = u / inputW;
-      const finalV = v / inputH;
 
-      // Step 4: Sample and store
-      const inBounds = finalU >= 0.0 && finalU <= 1.0 && finalV >= 0.0 && finalV <= 1.0;
+      // Step 4: Bilinear interpolation and store
+      // Use pixel coordinates directly (OpenCV convention: pixel (i,j) is at position (i,j))
+      const inBounds =
+        validProjection && u >= 0.0 && u <= inputW - 1.0 && v >= 0.0 && v <= inputH - 1.0;
       if (inBounds) {
-        const sampleCoord = d.vec2i(d.i32(finalU * inputW), d.i32(finalV * inputH));
-        const color = std.textureLoad(fisheyeLayout.$.inputTexture, sampleCoord, 0);
+        // Get integer and fractional parts
+        const x0 = std.floor(u);
+        const y0 = std.floor(v);
+        const fx = u - x0;
+        const fy = v - y0;
+
+        // Clamp coordinates to valid range
+        const maxX = inputW - 1.0;
+        const maxY = inputH - 1.0;
+        const ix0 = d.i32(std.clamp(x0, 0.0, maxX));
+        const iy0 = d.i32(std.clamp(y0, 0.0, maxY));
+        const ix1 = d.i32(std.clamp(x0 + 1.0, 0.0, maxX));
+        const iy1 = d.i32(std.clamp(y0 + 1.0, 0.0, maxY));
+
+        // Load 4 neighboring pixels
+        const c00 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy0), 0);
+        const c10 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy0), 0);
+        const c01 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy1), 0);
+        const c11 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy1), 0);
+
+        // Bilinear interpolation
+        const c0 = std.mix(c00, c10, fx);
+        const c1 = std.mix(c01, c11, fx);
+        const color = std.mix(c0, c1, fy);
+
         std.textureStore(fisheyeLayout.$.outputTexture, coord, color);
       } else {
         std.textureStore(fisheyeLayout.$.outputTexture, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
