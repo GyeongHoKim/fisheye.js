@@ -165,16 +165,68 @@ test.describe("Fisheye E2E - OpenCV Comparison", () => {
             return ctx.getImageData(0, 0, frame.displayWidth, frame.displayHeight);
           };
 
+          function pixelStats(
+            actual: Uint8ClampedArray,
+            expected: Uint8ClampedArray,
+            threshold: number,
+          ): { sumSquaredError: number; maxDiff: number; matchCount: number } {
+            let sumSquaredError = 0;
+            let maxDiff = 0;
+            let matchCount = 0;
+            for (let i = 0; i < actual.length; i += 4) {
+              const dr = Math.abs(actual[i] - expected[i]);
+              const dg = Math.abs(actual[i + 1] - expected[i + 1]);
+              const db = Math.abs(actual[i + 2] - expected[i + 2]);
+              sumSquaredError += dr * dr + dg * dg + db * db;
+              const pixelDiff = Math.max(dr, dg, db);
+              maxDiff = Math.max(maxDiff, pixelDiff);
+              if (pixelDiff <= threshold) matchCount++;
+            }
+            return { sumSquaredError, maxDiff, matchCount };
+          }
+
+          function comparePixels(
+            actualData: ImageData,
+            expectedData: ImageData,
+          ): {
+            mse: number;
+            psnr: number;
+            maxDiff: number;
+            matchPercent: number;
+            error: string | null;
+          } {
+            const actual = actualData.data;
+            const expected = expectedData.data;
+            if (actual.length !== expected.length) {
+              return {
+                error: `Size mismatch: actual=${actual.length} (${actualData.width}x${actualData.height}), expected=${expected.length} (${expectedData.width}x${expectedData.height})`,
+                mse: -1,
+                psnr: -1,
+                maxDiff: -1,
+                matchPercent: 0,
+              };
+            }
+            const threshold = 10;
+            const numPixels = actual.length / 4;
+            const { sumSquaredError, maxDiff, matchCount } = pixelStats(
+              actual,
+              expected,
+              threshold,
+            );
+            const mse = sumSquaredError / (numPixels * 3);
+            const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
+            const matchPercent = (matchCount / numPixels) * 100;
+            return { mse, psnr, maxDiff, matchPercent, error: null };
+          }
+
           const Fisheye = (
             window as unknown as { Fisheye: typeof import("../../src/fisheye").Fisheye }
           ).Fisheye;
 
-          // Load images
           const originalImg = await loadImage(originalPath);
           const expectedImg = await loadImage(dewarpedPath);
           const expectedImageData = imageToImageData(expectedImg);
 
-          // Create Fisheye instance with test parameters
           const fisheye = new Fisheye({
             fx: cameraMatrix.fx,
             fy: cameraMatrix.fy,
@@ -191,55 +243,14 @@ test.describe("Fisheye E2E - OpenCV Comparison", () => {
             projection: projection,
           });
 
-          // Process
           const inputFrame = await imageToVideoFrame(originalImg);
           const outputFrame = await fisheye.undistort(inputFrame);
           const resultImageData = await videoFrameToImageData(outputFrame);
-
-          // Cleanup frames
           inputFrame.close();
           outputFrame.close();
           fisheye.destroy();
 
-          // Compare pixels
-          const actual = resultImageData.data;
-          const expected = expectedImageData.data;
-
-          if (actual.length !== expected.length) {
-            return {
-              error: `Size mismatch: actual=${actual.length} (${resultImageData.width}x${resultImageData.height}), expected=${expected.length} (${expectedImageData.width}x${expectedImageData.height})`,
-              mse: -1,
-              psnr: -1,
-              maxDiff: -1,
-              matchPercent: 0,
-            };
-          }
-
-          let sumSquaredError = 0;
-          let maxDiff = 0;
-          let matchCount = 0;
-          const threshold = 10; // pixel difference threshold for "match"
-          const numPixels = actual.length / 4;
-
-          for (let i = 0; i < actual.length; i += 4) {
-            const dr = Math.abs(actual[i] - expected[i]);
-            const dg = Math.abs(actual[i + 1] - expected[i + 1]);
-            const db = Math.abs(actual[i + 2] - expected[i + 2]);
-
-            sumSquaredError += dr * dr + dg * dg + db * db;
-            const pixelDiff = Math.max(dr, dg, db);
-            maxDiff = Math.max(maxDiff, pixelDiff);
-
-            if (pixelDiff <= threshold) {
-              matchCount++;
-            }
-          }
-
-          const mse = sumSquaredError / (numPixels * 3);
-          const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
-          const matchPercent = (matchCount / numPixels) * 100;
-
-          return { mse, psnr, maxDiff, matchPercent, error: null };
+          return comparePixels(resultImageData, expectedImageData);
         },
         {
           originalPath: testCase.original_image_path,
