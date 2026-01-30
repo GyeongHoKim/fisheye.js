@@ -14,34 +14,31 @@ const FISHEYE_DEFAULTS = {
   k4: -0.00374209380722371,
   centerX: -0.0306,
   centerY: -0.0452,
-  fov: 180,
-  zoom: 0.66,
+  balance: 0.0,
+  fovScale: 0.66,
   projection: "rectilinear" as FisheyeProjection,
   mount: "ceiling" as FisheyeMount,
 };
 
-/** Presets map user-facing names to mount + projection + fov (see src/types.ts). */
+/** Presets map user-facing names to mount + projection (see src/types.ts). */
 const VIEW_PRESETS = [
   {
     id: "normal",
     label: "Normal (90°)",
     projection: "rectilinear" as FisheyeProjection,
     mount: "ceiling" as FisheyeMount,
-    fov: 90,
   },
   {
     id: "panoramic180",
     label: "Panoramic 180°",
     projection: "equirectangular" as FisheyeProjection,
     mount: "ceiling" as FisheyeMount,
-    fov: 180,
   },
   {
     id: "panoramic360",
     label: "360° Panorama",
     projection: "equirectangular" as FisheyeProjection,
     mount: "ceiling" as FisheyeMount,
-    fov: 360,
   },
 ] as const;
 type PresetId = (typeof VIEW_PRESETS)[number]["id"];
@@ -52,10 +49,10 @@ export class FisheyeDemo extends LitElement {
   @state() private k2 = FISHEYE_DEFAULTS.k2;
   @state() private k3 = FISHEYE_DEFAULTS.k3;
   @state() private k4 = FISHEYE_DEFAULTS.k4;
-  @state() private fov = FISHEYE_DEFAULTS.fov;
+  @state() private balance = FISHEYE_DEFAULTS.balance;
+  @state() private fovScale = FISHEYE_DEFAULTS.fovScale;
   @state() private centerX = FISHEYE_DEFAULTS.centerX;
   @state() private centerY = FISHEYE_DEFAULTS.centerY;
-  @state() private zoom = FISHEYE_DEFAULTS.zoom;
   @state() private presetId: PresetId | null = null;
   @state() private projection: FisheyeProjection = FISHEYE_DEFAULTS.projection;
   @state() private mount: FisheyeMount = FISHEYE_DEFAULTS.mount;
@@ -151,19 +148,21 @@ export class FisheyeDemo extends LitElement {
     try {
       await this.updateComplete;
 
+      const w = this.currentImageBitmap.width;
+      const h = this.currentImageBitmap.height;
       const fisheyeOptions = {
         k1: this.k1,
         k2: this.k2,
         k3: this.k3,
         k4: this.k4,
-        fov: this.fov,
+        width: w,
+        height: h,
+        balance: this.balance,
+        fovScale: this.fovScale,
         projection: this.projection,
         mount: this.mount,
-        centerX: this.centerX,
-        centerY: this.centerY,
-        zoom: this.zoom,
-        width: this.currentImageBitmap.width,
-        height: this.currentImageBitmap.height,
+        cx: w * (0.5 + this.centerX),
+        cy: h * (0.5 + this.centerY),
       };
 
       // Initialize fisheye if needed
@@ -187,7 +186,7 @@ export class FisheyeDemo extends LitElement {
 
       try {
         // Dewarp the frame
-        outputFrame = await this.fisheye.dewarp(inputFrame);
+        outputFrame = await this.fisheye.undistort(inputFrame);
         inputFrame.close();
         inputClosed = true;
 
@@ -241,7 +240,6 @@ export class FisheyeDemo extends LitElement {
     this.presetId = preset.id;
     this.projection = preset.projection;
     this.mount = preset.mount;
-    this.fov = preset.fov;
     this.fisheye = null;
     await this.enqueueProcessImage();
   }
@@ -254,14 +252,14 @@ export class FisheyeDemo extends LitElement {
     this.presetId = null;
     this.projection = FISHEYE_DEFAULTS.projection;
     this.mount = FISHEYE_DEFAULTS.mount;
-    this.fov = FISHEYE_DEFAULTS.fov;
+    this.balance = FISHEYE_DEFAULTS.balance;
+    this.fovScale = FISHEYE_DEFAULTS.fovScale;
     this.k1 = FISHEYE_DEFAULTS.k1;
     this.k2 = FISHEYE_DEFAULTS.k2;
     this.k3 = FISHEYE_DEFAULTS.k3;
     this.k4 = FISHEYE_DEFAULTS.k4;
     this.centerX = FISHEYE_DEFAULTS.centerX;
     this.centerY = FISHEYE_DEFAULTS.centerY;
-    this.zoom = FISHEYE_DEFAULTS.zoom;
     this.fisheye = null;
     this.loadDefaultImage();
   }
@@ -299,7 +297,7 @@ export class FisheyeDemo extends LitElement {
 
                     <div class="control-group">
                       <h3>View preset</h3>
-                      <p class="control-hint">Mount + projection + FOV (see src/types.ts)</p>
+                      <p class="control-hint">Mount + projection (see src/types.ts)</p>
                       <div class="preset-buttons">
                         ${VIEW_PRESETS.map(
                           (p) => html`
@@ -325,10 +323,11 @@ export class FisheyeDemo extends LitElement {
 
                     <div class="control-group">
                       <h3>Camera Parameters</h3>
-                      ${this.renderSlider("fov", this.fov, 60, 220, 1)}
+                      <p class="control-hint">balance: 0 = all pixels, 1 = original FOV. fovScale: &gt;1 = zoom out, &lt;1 = zoom in.</p>
+                      ${this.renderSlider("balance", this.balance, 0, 1, 0.01)}
+                      ${this.renderSlider("fovScale", this.fovScale, 0.1, 3, 0.01)}
                       ${this.renderSlider("centerX", this.centerX, -0.5, 0.5, 0.001)}
                       ${this.renderSlider("centerY", this.centerY, -0.5, 0.5, 0.001)}
-                      ${this.renderSlider("zoom", this.zoom, 0.1, 3, 0.01)}
                     </div>
 
                     <div class="control-group">

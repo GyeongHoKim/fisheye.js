@@ -1,5 +1,5 @@
 /**
- * E2E repro: runs the exact Fisheye.dewarp() path and exposes the result.
+ * E2E repro: runs the exact Fisheye.undistort() path and exposes the result.
  * Used by test/dewarp-typegpu-invariant.spec.ts to assert on the thrown error.
  */
 
@@ -26,7 +26,7 @@ export async function runDewarpRepro(
 
   try {
     const dewarper = new Fisheye(fisheyeOptions);
-    const outputFrame = await dewarper.dewarp(inputFrame);
+    const outputFrame = await dewarper.undistort(inputFrame);
     inputFrame.close();
     outputFrame.close();
     dewarper.destroy();
