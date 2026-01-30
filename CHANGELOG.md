@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/GyeongHoKim/fisheye.js/compare/v1.1.0...v1.1.1) (2026-01-30)
+
+
+### Bug Fixes
+
+* bilinear interpolation ([570ccee](https://github.com/GyeongHoKim/fisheye.js/commit/570ccee7d3836235002dc5ca32e1f00389db7b97))
+
 # [1.1.0](https://github.com/GyeongHoKim/fisheye.js/compare/v1.0.2...v1.1.0) (2026-01-29)
 
 
