@@ -1,0 +1,42 @@
+[
+  {
+    "camera_id": 1,
+    "camera_model": "OPENCV_FISHEYE",
+    "image_width": 3264,
+    "image_height": 3264,
+    "original_image_path": "cam1_original.jpg",
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.035620087631248215,
+      "k2": -0.02587978911672547,
+      "k3": 0.0056424890052298995,
+      "k4": -0.001070431231569348
+    },
+    "dewarped_image_path": "cam1_dewarped.jpg"
+  },
+  {
+    "camera_id": 2,
+    "camera_model": "OPENCV_FISHEYE",
+    "image_width": 3264,
+    "image_height": 3264,
+    "original_image_path": "cam2_original.jpg",
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.024943212941115993,
+      "k2": 0.004998495635271209,
+      "k3": -0.01754164144240906,
+      "k4": 0.004552070895180851
+    },
+    "dewarped_image_path": "cam2_dewarped.jpg"
+  }
+]
