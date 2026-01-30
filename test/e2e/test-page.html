@@ -20,29 +20,8 @@
       // Import the library from the built dist folder
       import { Fisheye } from "../../dist/index.js";
 
-      // Check if WebGPU adapter is available (GPU load check), with timeout so testReady is always set
-      let webgpuAvailable = false;
-      let gpuAdapterInfo = null;
-      if (navigator.gpu) {
-        try {
-          const adapter = await Promise.race([
-            navigator.gpu.requestAdapter(),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("requestAdapter timeout")), 8000),
-            ),
-          ]);
-          webgpuAvailable = !!adapter;
-          if (adapter?.info) {
-            gpuAdapterInfo = {
-              vendor: adapter.info.vendor,
-              architecture: adapter.info.architecture,
-            };
-          }
-        } catch (e) {
-          webgpuAvailable = false;
-          gpuAdapterInfo = { error: String(e?.message ?? String(e)) };
-        }
-      }
+      const webgpuAvailable = !!navigator.gpu;
+      const gpuAdapterInfo = null;
 
       // Expose to window for Playwright access
       window.Fisheye = Fisheye;
