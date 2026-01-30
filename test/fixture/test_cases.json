@@ -1,0 +1,246 @@
+[
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_balanced",
+    "description": "Rectilinear projection with balanced FOV (typical surveillance/webcam use)",
+    "original_image_path": "cam1_original.jpg",
+    "dewarped_image_path": "cam1_rectilinear_balanced.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.5,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 89.21730931674149,
+      "fy": 89.21730931674149,
+      "cx": 1652.0,
+      "cy": 1647.0
+    }
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_full_fov",
+    "description": "Rectilinear projection preserving full FOV (maximum coverage)",
+    "original_image_path": "cam1_original.jpg",
+    "dewarped_image_path": "cam1_rectilinear_full_fov.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 1.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 89.21730931674149,
+      "fy": 89.21730931674149,
+      "cx": 1652.0,
+      "cy": 1647.0
+    }
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_zoomed",
+    "description": "Rectilinear projection with zoom for detail (video conferencing)",
+    "original_image_path": "cam1_original.jpg",
+    "dewarped_image_path": "cam1_rectilinear_zoomed.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 1632,
+    "output_height": 1632,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.5,
+    "fov_scale": 0.7,
+    "new_camera_matrix": {
+      "fx": 63.72664951195821,
+      "fy": 63.72664951195821,
+      "cx": 830.2857142857142,
+      "cy": 826.7142857142857
+    }
+  },
+  {
+    "camera_id": 1,
+    "scenario": "equirectangular_panorama",
+    "description": "Equirectangular projection for 360 panorama stitching",
+    "original_image_path": "cam1_original.jpg",
+    "dewarped_image_path": "cam1_equirectangular_panorama.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_balanced",
+    "description": "Rectilinear projection with balanced FOV (typical surveillance/webcam use)",
+    "original_image_path": "cam2_original.jpg",
+    "dewarped_image_path": "cam2_rectilinear_balanced.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.5,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 6.775532347311902,
+      "fy": 6.775532347311902,
+      "cx": 1652.0,
+      "cy": 1647.0
+    }
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_full_fov",
+    "description": "Rectilinear projection preserving full FOV (maximum coverage)",
+    "original_image_path": "cam2_original.jpg",
+    "dewarped_image_path": "cam2_rectilinear_full_fov.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 1.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 6.775532347311901,
+      "fy": 6.775532347311901,
+      "cx": 1652.0,
+      "cy": 1647.0
+    }
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_zoomed",
+    "description": "Rectilinear projection with zoom for detail (video conferencing)",
+    "original_image_path": "cam2_original.jpg",
+    "dewarped_image_path": "cam2_rectilinear_zoomed.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 1632,
+    "output_height": 1632,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.5,
+    "fov_scale": 0.7,
+    "new_camera_matrix": {
+      "fx": 4.839665962365644,
+      "fy": 4.839665962365644,
+      "cx": 830.2857142857143,
+      "cy": 826.7142857142857
+    }
+  },
+  {
+    "camera_id": 2,
+    "scenario": "equirectangular_panorama",
+    "description": "Equirectangular projection for 360 panorama stitching",
+    "original_image_path": "cam2_original.jpg",
+    "dewarped_image_path": "cam2_equirectangular_panorama.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  }
+]

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>E2E Test Page</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "typegpu": "https://esm.sh/typegpu@0.9.0",
+          "typegpu/data": "https://esm.sh/typegpu@0.9.0/data",
+          "typegpu/std": "https://esm.sh/typegpu@0.9.0/std"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h1>E2E Test Page</h1>
+    <script type="module">
+      // Import the library from the built dist folder
+      import { Fisheye } from "../../dist/index.js";
+
+      // Check if WebGPU adapter is available (GPU load check), with timeout so testReady is always set
+      let webgpuAvailable = false;
+      let gpuAdapterInfo = null;
+      if (navigator.gpu) {
+        try {
+          const adapter = await Promise.race([
+            navigator.gpu.requestAdapter(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("requestAdapter timeout")), 8000),
+            ),
+          ]);
+          webgpuAvailable = !!adapter;
+          if (adapter?.info) {
+            gpuAdapterInfo = {
+              vendor: adapter.info.vendor,
+              architecture: adapter.info.architecture,
+            };
+          }
+        } catch (e) {
+          webgpuAvailable = false;
+          gpuAdapterInfo = { error: String(e?.message ?? String(e)) };
+        }
+      }
+
+      // Expose to window for Playwright access
+      window.Fisheye = Fisheye;
+      window.webgpuAvailable = webgpuAvailable;
+      window.gpuAdapterInfo = gpuAdapterInfo;
+      window.testReady = true;
+    </script>
+  </body>
+</html>

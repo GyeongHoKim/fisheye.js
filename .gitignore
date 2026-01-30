@@ -35,3 +35,4 @@ test-results
 .cache/
 temp/
 tmp/
+test/fixture/venv/
