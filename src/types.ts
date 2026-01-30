@@ -1,123 +1,146 @@
 /**
- * How the corrected ray directions are mapped to the output image.
- *
- * - **rectilinear**: Standard perspective (like a normal camera). Straight lines in the
- *   scene stay straight; the center is natural, edges are compressed. With wide FOV (e.g.
- *   180°) the edges look very squished. One "window" view.
- *
- * - **equirectangular**: Horizontal axis = azimuth (longitude), vertical = elevation
- *   (latitude). The full horizontal span (e.g. 180°) maps linearly to the width, so you
- *   get a wide panoramic strip: left = one side, right = the other. Classic panorama look.
- *
- * Commercial equivalents:
- * - "Panoramic 180" / "180° Panorama" → equirectangular with 180° horizontal.
- * - "Panoramic" / "360° Panorama" → equirectangular with 360° horizontal (ceiling mount).
- * - "Normal" / "PTZ view" / single window → rectilinear (often with ~90° FOV per pane).
- * - "Panoramic with 4 panes" / "Quad" → layout of four rectilinear ~90° views, not one projection.
+ * Output projection mode.
  */
-export type FisheyeProjection = "rectilinear" | "equirectangular";
+export type FisheyeProjection = "rectilinear" | "equirectangular" | "original";
 
 /**
- * Camera mount position. Affects which view range is meaningful (e.g. ceiling → 360° azimuth).
- * Used for defaults or validation when combined with projection.
+ * Camera mount position.
  */
 export type FisheyeMount = "ceiling" | "wall" | "desk";
 
 /**
- * **Presets for UI:** Combine `mount` + `projection` (+ `fov`) and expose them to end users
- * as preset names instead of raw options. Example mapping:
+ * Fisheye undistortion configuration.
  *
- * | User-facing name        | mount   | projection     | fov                  |
- * |-------------------------|---------|----------------|----------------------|
- * | Panoramic 180           | any     | equirectangular| 180                  |
- * | 360° Panorama           | ceiling | equirectangular| 360                  |
- * | Normal / PTZ view       | any     | rectilinear    | e.g. 90              |
- * | Quad (4 panes)          | ceiling | rectilinear ×4 | 90 per pane (layout) |
- *
- * The library does not define preset names; the app chooses labels and maps them to
- * `FisheyeOptions` (and, for Quad, to multiple Fisheye instances or a layout pipeline).
- */
-
-/**
- * Options for configuring the Fisheye dewarper
+ * Based on OpenCV fisheye camera model (Kannala-Brandt).
+ * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
  */
 export interface FisheyeOptions {
   /**
-   * Fisheye distortion coefficient k1 (OpenCV fisheye / Kannala–Brandt).
-   * From calibration; omit or 0 for ideal equidistant.
+   * Camera matrix K: focal length x (pixels).
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+   */
+  fx?: number;
+
+  /**
+   * Camera matrix K: focal length y (pixels).
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+   */
+  fy?: number;
+
+  /**
+   * Camera matrix K: principal point x (pixels).
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+   */
+  cx?: number;
+
+  /**
+   * Camera matrix K: principal point y (pixels).
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+   */
+  cy?: number;
+
+  /**
+   * Distortion coefficient k1 (Kannala-Brandt).
    * @default 0
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
   k1?: number;
 
   /**
-   * Fisheye distortion coefficient k2.
+   * Distortion coefficient k2 (Kannala-Brandt).
    * @default 0
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
   k2?: number;
 
   /**
-   * Fisheye distortion coefficient k3.
+   * Distortion coefficient k3 (Kannala-Brandt).
    * @default 0
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
   k3?: number;
 
   /**
-   * Fisheye distortion coefficient k4.
+   * Distortion coefficient k4 (Kannala-Brandt).
    * @default 0
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
   k4?: number;
 
   /**
-   * Output image width in pixels.
+   * Output image width (pixels).
    * @default 300
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
   width?: number;
 
   /**
-   * Output image height in pixels.
+   * Output image height (pixels).
    * @default 150
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
   height?: number;
 
   /**
-   * Field of view in degrees.
-   * For rectilinear: angular diameter of the output. For equirectangular: horizontal span.
-   * @default 180
+   * Balance between all pixels vs original FOV (0.0-1.0).
+   * @default 0.0
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
    */
-  fov?: number;
+  balance?: number;
 
   /**
-   * Projection used to map corrected angles to output pixels.
+   * FOV scale divisor (>1.0 = zoom out, <1.0 = zoom in).
+   * @default 1.0
+   * @see https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html
+   */
+  fovScale?: number;
+
+  /**
+   * Output projection mode.
    * @default "rectilinear"
    */
   projection?: FisheyeProjection;
 
   /**
-   * Camera mount position. Optional; can affect default FOV or valid range when projection is equirectangular.
+   * Camera mount position.
    * @default "ceiling"
    */
   mount?: FisheyeMount;
-
-  /**
-   * X offset of the lens center (normalized, -1.0 to 1.0).
-   * @default 0
-   */
-  centerX?: number;
-
-  /**
-   * Y offset of the lens center (normalized, -1.0 to 1.0).
-   * @default 0
-   */
-  centerY?: number;
-
-  /**
-   * Zoom factor applied after distortion correction.
-   * @default 1.0
-   */
-  zoom?: number;
 }
 
 /**
- * Internal configuration after applying defaults
+ * Internal configuration with all defaults applied.
+ *
+ * Note: fx, fy, cx, cy are optional because they default to input image dimensions
+ * which are not known until undistort() is called.
  */
-export interface FisheyeConfig extends Required<FisheyeOptions> {}
+export interface FisheyeConfig {
+  /** Camera matrix K: fx. Defaults to input width if not specified. */
+  fx: number | undefined;
+  /** Camera matrix K: fy. Defaults to input width if not specified. */
+  fy: number | undefined;
+  /** Camera matrix K: cx. Defaults to input width / 2 if not specified. */
+  cx: number | undefined;
+  /** Camera matrix K: cy. Defaults to input height / 2 if not specified. */
+  cy: number | undefined;
+  /** Distortion coefficient k1. */
+  k1: number;
+  /** Distortion coefficient k2. */
+  k2: number;
+  /** Distortion coefficient k3. */
+  k3: number;
+  /** Distortion coefficient k4. */
+  k4: number;
+  /** Output width. */
+  width: number;
+  /** Output height. */
+  height: number;
+  /** Balance parameter. */
+  balance: number;
+  /** FOV scale parameter. */
+  fovScale: number;
+  /** Output projection mode. */
+  projection: FisheyeProjection;
+  /** Camera mount position. */
+  mount: FisheyeMount;
+}
