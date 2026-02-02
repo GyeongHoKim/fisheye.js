@@ -28,7 +28,8 @@ export async function runDewarpRepro(
     const dewarper = new Fisheye(fisheyeOptions);
     const outputFrame = await dewarper.undistort(inputFrame);
     inputFrame.close();
-    outputFrame.close();
+    const frames = Array.isArray(outputFrame) ? outputFrame : [outputFrame];
+    for (const f of frames) f.close();
     dewarper.destroy();
     return { success: true };
   } catch (e) {
