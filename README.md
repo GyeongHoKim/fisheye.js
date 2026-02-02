@@ -45,34 +45,51 @@ in your code,
 ```ts
 import { Fisheye } from "@gyeonghokim/fisheye.js";
 
+// Option 1: Flat style (simple)
 const fisheye = new Fisheye({
-  // OpenCV fisheye distortion coefficients (from calibration)
+  // OpenCV fisheye distortion coefficients D = [k1, k2, k3, k4]
   k1: 0.5,
   k2: 0.0,
   k3: 0.0,
   k4: 0.0,
 
-  // Output configuration
+  // Output size
   width: 1920,
   height: 1080,
 
-  // Optional: OpenCV camera matrix parameters
+  // Optional: Camera matrix K parameters
   fx: 1000, // focal length x (pixels)
   fy: 1000, // focal length y (pixels)
   cx: 960, // principal point x (pixels)
   cy: 540, // principal point y (pixels)
 
-  // Optional: Advanced OpenCV parameters
-  balance: 0.0, // 0.0 = all pixels, 1.0 = original FOV
-  fovScale: 1.0, // >1.0 = zoom out, <1.0 = zoom in
+  // Optional: New camera matrix P estimation parameters
+  balance: 0.0, // 0.0 = no black edges (zoom in), 1.0 = keep original FOV (may have black edges)
+  fovScale: 1.0, // >1.0 = widen FOV, <1.0 = narrow FOV
 
-  // Optional: Additional features (not part of OpenCV)
-  projection: "rectilinear", // "rectilinear" | "equirectangular"
-  mount: "ceiling", // "ceiling" | "wall" | "desk"
+  // Optional: Projection mode
+  projection: { kind: "rectilinear" }, // or "equirectangular", "cylindrical", "original"
+});
+
+// Option 2: Grouped style (OpenCV-like)
+const fisheyeGrouped = new Fisheye({
+  K: { fx: 1000, fy: 1000, cx: 960, cy: 540 },
+  D: { k1: 0.5, k2: 0, k3: 0, k4: 0 },
+  size: { width: 1920, height: 1080 },
+  balance: 0.0,
+  fovScale: 1.0,
+  projection: { kind: "rectilinear" },
+});
+
+// Option 3: Manual rectilinear with explicit P matrix
+const fisheyeManual = new Fisheye({
+  k1: 0.5, k2: 0, k3: 0, k4: 0,
+  width: 1920,
+  height: 1080,
+  projection: { kind: "rectilinear", mode: "manual", newFx: 800, newFy: 800 },
 });
 
 const renderLoop = async (timestamp: DOMHighResTimestamp) => {
-  // Undistort the fisheye frame
   const undistorted: VideoFrame = await fisheye.undistort(yourVideoFrame);
   yourYUVPlayer.draw(undistorted);
   requestAnimationFrame(renderLoop);
@@ -86,37 +103,29 @@ const renderLoop = async (timestamp: DOMHighResTimestamp) => {
 This library uses the **OpenCV fisheye model** (Kannala-Brandt, 2006) for undistortion:
 
 ```
-theta = atan(r)
-theta_d = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8)
-r_d = tan(theta_d)
+# Normalized coordinates (a, b) where a = X/Z, b = Y/Z
+r = sqrt(a² + b²)
+θ = atan(r)                                           # incidence angle
+θ_d = θ × (1 + k₁θ² + k₂θ⁴ + k₃θ⁶ + k₄θ⁸)           # distorted angle
+x' = (θ_d / r) × a,  y' = (θ_d / r) × b              # distorted coords
+u = fx(x' + αy') + cx,  v = fy × y' + cy             # pixel coords
 ```
 
 This is the same model as [OpenCV's fisheye module](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html).
 
 **Important:** OpenCV's `fisheye.undistortImage()` always outputs **rectilinear (perspective) projection only**. It does not provide panoramic or other projection modes.
 
-### Additional Features Beyond OpenCV
+### Projection Modes
 
-For **WebGPU efficiency**, we integrate additional transformations in a **single GPU pass** rather than CPU-side post-processing:
+For **WebGPU efficiency**, projection transformation is applied in a **single GPU pass**:
 
-#### 1. **Projection Mode** (`projection`)
-
-- **Purpose**: Controls output coordinate mapping after undistortion
-- **Values**:
-  - `"rectilinear"`: Standard perspective projection (same as OpenCV output)
-  - `"equirectangular"`: Cylindrical/spherical panoramic projection
-- **Implementation**: Applied in GPU shader after undistortion step
-- **OpenCV equivalent**: Would require separate `cv2.warpPerspective()` or custom remapping after `fisheye.undistortImage()`
-
-#### 2. **Mount Orientation** (`mount`)
-
-- **Purpose**: Compensates for camera mounting angle
-- **Values**:
-  - `"ceiling"`: No rotation (0°)
-  - `"wall"`: 90° rotation
-  - `"desk"`: 180° or -90° rotation
-- **Implementation**: Applied as rotation transformation in GPU shader
-- **OpenCV equivalent**: Would require `cv2.getRotationMatrix2D()` + `cv2.warpAffine()` after undistortion
+| Mode | Description |
+|------|-------------|
+| `rectilinear` | Standard perspective projection (same as OpenCV) |
+| `rectilinear` + `mode: "manual"` | Explicit P matrix with `newFx`, `newFy`, `newCx?`, `newCy?` |
+| `equirectangular` | Panoramic equirectangular projection |
+| `cylindrical` | Panoramic cylindrical projection |
+| `original` | Pass-through (no undistortion) |
 
 ### Why Unified GPU Pipeline?
 
@@ -126,17 +135,14 @@ Traditional OpenCV approach:
 # Step 1: Undistort (GPU/CPU)
 undistorted = cv2.fisheye.undistortImage(img, K, D, Knew)
 
-# Step 2: Projection transform (CPU)
+# Step 2: Projection transform (CPU) - if panoramic needed
 panorama = cv2.remap(undistorted, custom_map_x, custom_map_y, cv2.INTER_LINEAR)
-
-# Step 3: Rotation (CPU)
-rotated = cv2.warpAffine(panorama, rotation_matrix, size)
 ```
 
 **Our approach (single GPU compute shader):**
 
 ```typescript
-// All in one GPU pass: undistortion + projection + rotation
+// All in one GPU pass: undistortion + projection
 const undistorted = await fisheye.undistort(input);
 ```
 
@@ -160,17 +166,29 @@ Creates a new Fisheye undistortion instance.
 | `k4`       | `number?` | `0`        | Distortion coefficient k4 (Kannala-Brandt)               |
 | `width`    | `number?` | `300`      | Output image width (OpenCV `new_size.width`)             |
 | `height`   | `number?` | `150`      | Output image height (OpenCV `new_size.height`)           |
-| `balance`  | `number?` | `0.0`      | Balance parameter (0.0 = all pixels, 1.0 = original FOV) |
-| `fovScale` | `number?` | `1.0`      | FOV scale divisor (>1.0 = zoom out, <1.0 = zoom in)      |
+| `balance`  | `number?` | `0.0`      | Balance (0.0 = no black edges/zoom in, 1.0 = keep original FOV) |
+| `fovScale` | `number?` | `1.0`      | FOV scale (>1.0 = widen FOV, <1.0 = narrow FOV)          |
 
 **Note:** These parameters exactly match [OpenCV fisheye API](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html). Use values from `cv2.fisheye.calibrate()` or `cv2.fisheye.estimateNewCameraMatrixForUndistortRectify()`.
 
-#### Additional Features (not part of OpenCV)
+#### Projection Options
 
-| Parameter    | Type                                   | Default         | Description                                                                                             |
-| ------------ | -------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
-| `projection` | `"rectilinear"` \| `"equirectangular"` | `"rectilinear"` | Output projection mode. `"rectilinear"` = perspective (same as OpenCV), `"equirectangular"` = panoramic |
-| `mount`      | `"ceiling"` \| `"wall"` \| `"desk"`    | `"ceiling"`     | Camera mount orientation for rotation compensation                                                      |
+| Parameter    | Type                 | Default                    | Description                                                    |
+| ------------ | -------------------- | -------------------------- | -------------------------------------------------------------- |
+| `projection` | `FisheyeProjection`  | `{ kind: "rectilinear" }`  | Output projection mode (see Projection Modes above)            |
+
+**FisheyeProjection types:**
+
+```typescript
+// Auto: P matrix computed from balance/fovScale
+{ kind: "rectilinear" }
+{ kind: "equirectangular" }
+{ kind: "cylindrical" }
+{ kind: "original" }
+
+// Manual: Explicit P matrix
+{ kind: "rectilinear", mode: "manual", newFx: number, newFy: number, newCx?: number, newCy?: number }
+```
 
 ### `undistort(frame: VideoFrame): Promise<VideoFrame>`
 
@@ -186,18 +204,16 @@ Undistorts a VideoFrame with fisheye distortion.
 
 Unlike OpenCV's `fisheye.undistortImage()` which only outputs rectilinear (perspective) projection, this method performs **all transformations in a single GPU pass** for WebGPU efficiency:
 
-1. **Undistortion** (OpenCV fisheye model)
-2. **Projection** (rectilinear or equirectangular, based on `projection` config)
-3. **Mount rotation** (based on `mount` config)
+1. **Undistortion** (OpenCV Kannala-Brandt fisheye model)
+2. **Projection** (rectilinear, equirectangular, cylindrical, or original)
 
-OpenCV equivalent would require 3 separate operations:
+OpenCV equivalent for non-rectilinear projections would require 2 separate operations:
 ```python
-# OpenCV: 3 CPU/GPU roundtrips
+# OpenCV: 2 CPU/GPU roundtrips for panoramic projection
 undistorted = cv2.fisheye.undistortImage(img, K, D, Knew)
-panorama = cv2.remap(undistorted, map_x, map_y, cv2.INTER_LINEAR)  # if equirectangular
-rotated = cv2.warpAffine(panorama, rotation_matrix, size)  # if ceiling/wall/desk
+panorama = cv2.remap(undistorted, map_x, map_y, cv2.INTER_LINEAR)
 
-# fisheye.js: 1 GPU pass - undistortion + projection + rotation
+# fisheye.js: 1 GPU pass - undistortion + projection
 undistorted = await fisheye.undistort(img)
 ```
 
