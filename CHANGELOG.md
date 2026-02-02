@@ -1,3 +1,29 @@
+# [2.0.0](https://github.com/GyeongHoKim/fisheye.js/compare/v1.1.1...v2.0.0) (2026-02-02)
+
+
+* feat(types)!: refactor FisheyeProjection to object format and group config ([ee1b060](https://github.com/GyeongHoKim/fisheye.js/commit/ee1b060d196d8a2bf39fccfd6beadf853b2d1c0c))
+
+
+### Bug Fixes
+
+* **fisheye:** use if/else instead of conditional expressions in GPU shader ([f2280df](https://github.com/GyeongHoKim/fisheye.js/commit/f2280df5aa42c1e646699b8e32af5b407bef3124))
+* **fisheye:** use writeBuffer in readback so output is not one frame behind ([70f2dd2](https://github.com/GyeongHoKim/fisheye.js/commit/70f2dd28e97ee6cd2eb44cfcaed5e92de97ff43d))
+* initialize TypeGPU variables to resolve shader compilation errors ([7bb32f8](https://github.com/GyeongHoKim/fisheye.js/commit/7bb32f8858aabbd3478cc360a44b58a956604ba8))
+* **lint:** resolve noExcessiveCognitiveComplexity in GPU compute callback ([9b6acde](https://github.com/GyeongHoKim/fisheye.js/commit/9b6acde8a0fbc06cf40028628531780aa999e030))
+* resolve TypeGPU variable initialization and cylindrical projection ([8663378](https://github.com/GyeongHoKim/fisheye.js/commit/8663378e37cd32ddb4aa6e5821ae8ca3e24a8fe1))
+
+
+### Features
+
+* **example:** sample image picker, calibration from test_cases, and UI tweaks ([2f800d7](https://github.com/GyeongHoKim/fisheye.js/commit/2f800d7ea7fa856ed1f37c37e24907c8ca1bdec6))
+* **fisheye:** update implementation to support new grouped config format ([4f802c6](https://github.com/GyeongHoKim/fisheye.js/commit/4f802c61649734b3f785195bda97258520533496))
+
+
+### BREAKING CHANGES
+
+* FisheyeProjection is now an object like { kind: "rectilinear" }
+instead of a string. The mount parameter has been removed entirely.
+
 ## [1.1.1](https://github.com/GyeongHoKim/fisheye.js/compare/v1.1.0...v1.1.1) (2026-01-30)
 
 
