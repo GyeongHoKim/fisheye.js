@@ -308,8 +308,13 @@ export class Fisheye {
             const cosLat = std.cos(lat);
             const dirZ = std.cos(lon) * cosLat;
             validProjection = dirZ > 0.001;
-            normX = validProjection ? (std.sin(lon) * cosLat) / dirZ : 0.0;
-            normY = validProjection ? std.sin(lat) / dirZ : 0.0;
+            if (validProjection) {
+              normX = (std.sin(lon) * cosLat) / dirZ;
+              normY = std.sin(lat) / dirZ;
+            } else {
+              normX = 0.0;
+              normY = 0.0;
+            }
           }
 
           const isCylindrical = p.projection > 2.5;
@@ -318,8 +323,13 @@ export class Fisheye {
             const yNorm = (coordYf / outputH - 0.5) * 2.0;
             const dirZ = std.cos(lon);
             validProjection = dirZ > 0.001;
-            normX = validProjection ? std.sin(lon) / dirZ : 0.0;
-            normY = validProjection ? yNorm / dirZ : 0.0;
+            if (validProjection) {
+              normX = std.sin(lon) / dirZ;
+              normY = yNorm / dirZ;
+            } else {
+              normX = 0.0;
+              normY = 0.0;
+            }
           }
 
           const r = std.sqrt(normX * normX + normY * normY);
