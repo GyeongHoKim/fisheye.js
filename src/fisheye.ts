@@ -1,13 +1,15 @@
 import tgpu, { type TgpuBuffer, type TgpuTexture } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
-import type { FisheyeConfig, FisheyeOptions } from "./types";
+import type { FisheyeConfig, FisheyeOptions, FisheyeOptionsStrict } from "./types";
+import { DEFAULT_PROJECTION, isRectilinearManual } from "./types";
 
 const FisheyeUniforms = d.struct({
   fx: d.f32,
   fy: d.f32,
   cx: d.f32,
   cy: d.f32,
+  alpha: d.f32,
   k1: d.f32,
   k2: d.f32,
   k3: d.f32,
@@ -23,7 +25,6 @@ const FisheyeUniforms = d.struct({
   projection: d.f32,
   _pad1: d.f32,
   _pad2: d.f32,
-  _pad3: d.f32,
 });
 
 type TgpuRootType = Awaited<ReturnType<typeof tgpu.init>>;
@@ -57,7 +58,7 @@ type UniformBufferType = TgpuBuffer<typeof FisheyeUniforms> & {
   usableAsUniform: true;
 };
 
-interface NewCameraMatrix {
+interface InternalCameraMatrix {
   newFx: number;
   newFy: number;
   newCx: number;
@@ -66,7 +67,7 @@ interface NewCameraMatrix {
 
 /**
  * Fisheye undistortion using WebGPU via TypeGPU.
- * Implements OpenCV fisheye model (Kannala-Brandt).
+ * @see {@link https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html}
  */
 export class Fisheye {
   private config: FisheyeConfig;
@@ -87,31 +88,40 @@ export class Fisheye {
   private outputTextureSize: [number, number] = [0, 0];
   private uniformInputWidth = 0;
   private uniformInputHeight = 0;
-  private cachedNewCameraMatrix: NewCameraMatrix | null = null;
+  private cachedNewCameraMatrix: InternalCameraMatrix | null = null;
 
   constructor(options: FisheyeOptions = {}) {
     this.config = this.applyDefaults(options);
   }
 
   private applyDefaults(options: FisheyeOptions): FisheyeConfig {
-    const width = options.width ?? 300;
-    const height = options.height ?? 150;
+    // Handle both flat options (FisheyeOptionsStrict) and grouped config (FisheyeConfig)
+    const isGrouped = "D" in options && "size" in options;
+
+    if (isGrouped) {
+      const grouped = options as FisheyeConfig;
+      return {
+        K: grouped.K,
+        D: grouped.D,
+        size: grouped.size,
+        balance: Math.max(0, Math.min(1, grouped.balance)),
+        fovScale: grouped.fovScale,
+        projection: grouped.projection,
+      };
+    }
+
+    // Flat options → grouped config
+    const flat = options as FisheyeOptionsStrict;
+    const { fx, fy, cx, cy, alpha, k1, k2, k3, k4, width, height, balance, fovScale, projection } =
+      flat;
 
     return {
-      k1: options.k1 ?? 0,
-      k2: options.k2 ?? 0,
-      k3: options.k3 ?? 0,
-      k4: options.k4 ?? 0,
-      width,
-      height,
-      balance: Math.max(0, Math.min(1, options.balance ?? 0.0)),
-      fovScale: options.fovScale ?? 1.0,
-      projection: options.projection ?? "rectilinear",
-      mount: options.mount ?? "ceiling",
-      fx: options.fx,
-      fy: options.fy,
-      cx: options.cx,
-      cy: options.cy,
+      K: fx !== undefined && fy !== undefined ? { fx, fy, cx, cy, alpha } : undefined,
+      D: { k1: k1 ?? 0, k2: k2 ?? 0, k3: k3 ?? 0, k4: k4 ?? 0 },
+      size: { width: width ?? 300, height: height ?? 150 },
+      balance: Math.max(0, Math.min(1, balance ?? 0.0)),
+      fovScale: fovScale ?? 1.0,
+      projection: projection ?? DEFAULT_PROJECTION,
     };
   }
 
@@ -166,21 +176,22 @@ export class Fisheye {
     return this.undistortPointNormalized(
       xNorm,
       yNorm,
-      this.config.k1,
-      this.config.k2,
-      this.config.k3,
-      this.config.k4,
+      this.config.D.k1,
+      this.config.D.k2,
+      this.config.D.k3,
+      this.config.D.k4,
     );
   }
 
-  /** Compute new camera matrix (OpenCV estimateNewCameraMatrixForUndistortRectify). */
-  private computeNewCameraMatrix(inputWidth: number, inputHeight: number): NewCameraMatrix {
+  /** @see {@link https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html#ga384940fdf04c03e362e94b6eb9b673c9|estimateNewCameraMatrixForUndistortRectify} */
+  private computeNewCameraMatrix(inputWidth: number, inputHeight: number): InternalCameraMatrix {
     const w = inputWidth;
     const h = inputHeight;
-    const fx = this.config.fx ?? inputWidth;
-    const fy = this.config.fy ?? inputWidth;
-    const cx = this.config.cx ?? inputWidth / 2;
-    const cy = this.config.cy ?? inputHeight / 2;
+    const K = this.config.K;
+    const fx = K?.fx ?? inputWidth;
+    const fy = K?.fy ?? inputWidth;
+    const cx = K?.cx ?? inputWidth / 2;
+    const cy = K?.cy ?? inputHeight / 2;
     const balance = this.config.balance;
     const fovScale = this.config.fovScale;
 
@@ -238,8 +249,8 @@ export class Fisheye {
     const newCx = -cn[0] * f + w * 0.5;
     const newCy = (-cn[1] * f) / aspectRatio + h * 0.5;
 
-    const rx = this.config.width / w;
-    const ry = this.config.height / h;
+    const rx = this.config.size.width / w;
+    const ry = this.config.size.height / h;
 
     return {
       newFx: f * rx,
@@ -276,7 +287,8 @@ export class Fisheye {
       }
 
       // Original projection (pass-through with bilinear interpolation)
-      if (p.projection >= 1.5) {
+      // projection: 0=rectilinear, 1=equirectangular, 2=original, 3=cylindrical
+      if (p.projection > 1.5 && p.projection < 2.5) {
         const srcX = (coordXf / outputW) * inputW;
         const srcY = (coordYf / outputH) * inputH;
 
@@ -310,8 +322,8 @@ export class Fisheye {
       let normY = (coordYf - p.newCy) / p.newFy;
       let validProjection = true;
 
-      // Equirectangular projection
-      if (p.projection >= 0.5) {
+      // Equirectangular projection (projection == 1)
+      if (p.projection > 0.5 && p.projection < 1.5) {
         const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
         const lat = (coordYf / outputH - 0.5) * Math.PI;
         const cosLat = std.cos(lat);
@@ -319,7 +331,6 @@ export class Fisheye {
         const dirY = std.sin(lat);
         const dirZ = std.cos(lon) * cosLat;
 
-        // Back hemisphere (dir_z <= 0) cannot be mapped from fisheye
         if (dirZ <= 0.001) {
           validProjection = false;
           normX = 0.0;
@@ -330,7 +341,25 @@ export class Fisheye {
         }
       }
 
+      // Cylindrical projection (projection == 3)
+      if (p.projection > 2.5) {
+        const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
+        const yNorm = (coordYf / outputH - 0.5) * 2.0;
+        const dirX = std.sin(lon);
+        const dirZ = std.cos(lon);
+
+        if (dirZ <= 0.001) {
+          validProjection = false;
+          normX = 0.0;
+          normY = 0.0;
+        } else {
+          normX = dirX / dirZ;
+          normY = yNorm / dirZ;
+        }
+      }
+
       // Step 2: Apply fisheye distortion (OpenCV forward model)
+      // θ_d = θ(1 + k₁θ² + k₂θ⁴ + k₃θ⁶ + k₄θ⁸)
       const r = std.sqrt(normX * normX + normY * normY);
       const theta = std.atan(r);
       const theta2 = theta * theta;
@@ -344,7 +373,8 @@ export class Fisheye {
       const distortedY = normY * scale;
 
       // Step 3: Convert to input pixel coordinates
-      const u = p.fx * distortedX + p.cx;
+      // u = fx·(x' + α·y') + cx, v = fy·y' + cy
+      const u = p.fx * (distortedX + p.alpha * distortedY) + p.cx;
       const v = p.fy * distortedY + p.cy;
 
       // Step 4: Bilinear interpolation and store
@@ -385,28 +415,54 @@ export class Fisheye {
   }
 
   private getUniformData(): d.Infer<typeof FisheyeUniforms> {
-    const inputWidth = this.uniformInputWidth || this.config.width;
-    const inputHeight = this.uniformInputHeight || this.config.height;
+    const { K, D, size, projection } = this.config;
+    const inputWidth = this.uniformInputWidth || size.width;
+    const inputHeight = this.uniformInputHeight || size.height;
 
-    const fx = this.config.fx ?? inputWidth;
-    const fy = this.config.fy ?? inputWidth;
-    const cx = this.config.cx ?? inputWidth / 2;
-    const cy = this.config.cy ?? inputHeight / 2;
+    const fx = K?.fx ?? inputWidth;
+    const fy = K?.fy ?? inputWidth;
+    const cx = K?.cx ?? inputWidth / 2;
+    const cy = K?.cy ?? inputHeight / 2;
+    const alpha = K?.alpha ?? 0;
 
-    if (
-      !this.cachedNewCameraMatrix ||
-      this.uniformInputWidth !== inputWidth ||
-      this.uniformInputHeight !== inputHeight
-    ) {
-      this.cachedNewCameraMatrix = this.computeNewCameraMatrix(inputWidth, inputHeight);
+    let newCam: InternalCameraMatrix;
+
+    // RectilinearManual: use provided newFx/newFy/newCx/newCy
+    if (isRectilinearManual(projection)) {
+      newCam = {
+        newFx: projection.newFx * (size.width / inputWidth),
+        newFy: projection.newFy * (size.height / inputHeight),
+        newCx: projection.newCx ?? size.width / 2,
+        newCy: projection.newCy ?? size.height / 2,
+      };
+    } else {
+      // Auto: compute via estimateNewCameraMatrixForUndistortRectify
+      if (
+        !this.cachedNewCameraMatrix ||
+        this.uniformInputWidth !== inputWidth ||
+        this.uniformInputHeight !== inputHeight
+      ) {
+        this.cachedNewCameraMatrix = this.computeNewCameraMatrix(inputWidth, inputHeight);
+      }
+      newCam = this.cachedNewCameraMatrix;
     }
-    const newCam = this.cachedNewCameraMatrix;
 
+    // Projection kind → numeric value for shader
+    // 0 = rectilinear, 1 = equirectangular, 2 = original, 3 = cylindrical
     let projectionValue = 0;
-    if (this.config.projection === "equirectangular") {
-      projectionValue = 1;
-    } else if (this.config.projection === "original") {
-      projectionValue = 2;
+    switch (projection.kind) {
+      case "rectilinear":
+        projectionValue = 0;
+        break;
+      case "equirectangular":
+        projectionValue = 1;
+        break;
+      case "original":
+        projectionValue = 2;
+        break;
+      case "cylindrical":
+        projectionValue = 3;
+        break;
     }
 
     return {
@@ -414,22 +470,22 @@ export class Fisheye {
       fy,
       cx,
       cy,
-      k1: this.config.k1,
-      k2: this.config.k2,
-      k3: this.config.k3,
-      k4: this.config.k4,
+      alpha,
+      k1: D.k1,
+      k2: D.k2,
+      k3: D.k3,
+      k4: D.k4,
       newFx: newCam.newFx,
       newFy: newCam.newFy,
       newCx: newCam.newCx,
       newCy: newCam.newCy,
-      outputWidth: this.config.width,
-      outputHeight: this.config.height,
+      outputWidth: size.width,
+      outputHeight: size.height,
       inputWidth,
       inputHeight,
       projection: projectionValue,
       _pad1: 0,
       _pad2: 0,
-      _pad3: 0,
     };
   }
 
@@ -464,7 +520,7 @@ export class Fisheye {
     commandEncoder.copyTextureToBuffer(
       { texture: outputTexture },
       { buffer: writeBuffer, bytesPerRow: this.readbackBytesPerRow },
-      [this.config.width, this.config.height],
+      [this.config.size.width, this.config.size.height],
     );
     device.queue.submit([commandEncoder.finish()]);
     await device.queue.onSubmittedWorkDone();
@@ -478,10 +534,10 @@ export class Fisheye {
     const mappedData = bufferToRead.getMappedRange();
 
     const pixelData =
-      this.pixelBuffer ?? new Uint8Array(this.config.width * this.config.height * 4);
+      this.pixelBuffer ?? new Uint8Array(this.config.size.width * this.config.size.height * 4);
     const srcView = new Uint8Array(mappedData);
 
-    for (let row = 0; row < this.config.height; row++) {
+    for (let row = 0; row < this.config.size.height; row++) {
       const srcOffset = row * this.readbackBytesPerRow;
       const dstOffset = row * this.readbackActualBytesPerRow;
       pixelData.set(
@@ -494,8 +550,8 @@ export class Fisheye {
 
     return new VideoFrame(pixelData, {
       format: "RGBA",
-      codedWidth: this.config.width,
-      codedHeight: this.config.height,
+      codedWidth: this.config.size.width,
+      codedHeight: this.config.size.height,
       timestamp,
     });
   }
@@ -556,24 +612,28 @@ export class Fisheye {
 
     if (
       !this.outputTexture ||
-      this.outputTextureSize[0] !== this.config.width ||
-      this.outputTextureSize[1] !== this.config.height
+      this.outputTextureSize[0] !== this.config.size.width ||
+      this.outputTextureSize[1] !== this.config.size.height
     ) {
       this.outputTexture?.destroy();
       this.readbackBuffers?.[0]?.destroy();
       this.readbackBuffers?.[1]?.destroy();
 
-      this.outputTexture = this.createOutputTexture(root, this.config.width, this.config.height);
-      this.readbackBytesPerRow = this.calculateBytesPerRow(this.config.width);
-      this.readbackActualBytesPerRow = this.config.width * 4;
-      this.pixelBuffer = new Uint8Array(this.config.width * this.config.height * 4);
+      this.outputTexture = this.createOutputTexture(
+        root,
+        this.config.size.width,
+        this.config.size.height,
+      );
+      this.readbackBytesPerRow = this.calculateBytesPerRow(this.config.size.width);
+      this.readbackActualBytesPerRow = this.config.size.width * 4;
+      this.pixelBuffer = new Uint8Array(this.config.size.width * this.config.size.height * 4);
       this.readbackBuffers = [
-        this.createReadbackBuffer(device, this.config.width, this.config.height),
-        this.createReadbackBuffer(device, this.config.width, this.config.height),
+        this.createReadbackBuffer(device, this.config.size.width, this.config.size.height),
+        this.createReadbackBuffer(device, this.config.size.width, this.config.size.height),
       ];
       this.readbackIndex = 0;
       this.readbackHasData = [false, false];
-      this.outputTextureSize = [this.config.width, this.config.height];
+      this.outputTextureSize = [this.config.size.width, this.config.size.height];
       this.bindGroup = null;
     }
 
@@ -607,7 +667,7 @@ export class Fisheye {
       throw new Error("Compute pipeline or output texture not initialized");
     }
 
-    this.pipeline.with(bindGroup).dispatchThreads(this.config.width, this.config.height);
+    this.pipeline.with(bindGroup).dispatchThreads(this.config.size.width, this.config.size.height);
 
     const outputGpuTexture = root.unwrap(outputTexture);
     return this.readbackToVideoFrame(device, outputGpuTexture, frame.timestamp);
@@ -615,13 +675,13 @@ export class Fisheye {
 
   /** Update configuration. */
   updateConfig(options: Partial<FisheyeOptions>): void {
-    const prevWidth = this.config.width;
-    const prevHeight = this.config.height;
+    const prevWidth = this.config.size.width;
+    const prevHeight = this.config.size.height;
     this.config = this.applyDefaults({ ...this.config, ...options });
     this.cachedNewCameraMatrix = null;
     this.updateUniforms();
 
-    if (this.config.width !== prevWidth || this.config.height !== prevHeight) {
+    if (this.config.size.width !== prevWidth || this.config.size.height !== prevHeight) {
       this.outputTexture?.destroy();
       this.readbackBuffers?.[0]?.destroy();
       this.readbackBuffers?.[1]?.destroy();
