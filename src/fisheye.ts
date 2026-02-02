@@ -319,13 +319,22 @@ export class Fisheye {
 
           const isCylindrical = p.projection > 2.5;
           if (isCylindrical) {
-            const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
-            const yNorm = (coordYf / outputH - 0.5) * 2.0;
-            const dirZ = std.cos(lon);
+            // Cylindrical projection: lon linear, lat via atan (unrolled cylinder)
+            // f_cyl = outputW / (2 * pi)
+            const fCyl = outputW / (Math.PI * 2.0);
+            const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0; // -pi to pi
+            const lat = std.atan((coordYf - outputH * 0.5) / fCyl); // latitude
+
+            // 3D direction vector
+            const cosLat = std.cos(lat);
+            const dirX = std.sin(lon) * cosLat;
+            const dirY = std.sin(lat);
+            const dirZ = std.cos(lon) * cosLat;
+
             validProjection = dirZ > 0.001;
             if (validProjection) {
-              normX = std.sin(lon) / dirZ;
-              normY = yNorm / dirZ;
+              normX = dirX / dirZ;
+              normY = dirY / dirZ;
             } else {
               normX = 0.0;
               normY = 0.0;
