@@ -270,148 +270,101 @@ export class Fisheye {
       .createBuffer(FisheyeUniforms, this.getUniformData())
       .$usage("uniform");
 
-    this.pipeline = this.root["~unstable"].createGuardedComputePipeline((x: number, y: number) => {
-      "use gpu";
+    this.pipeline = this.root["~unstable"].createGuardedComputePipeline(
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: GPU callback; projection branches must stay inline.
+      (x: number, y: number) => {
+        "use gpu";
 
-      const p = fisheyeLayout.$.uniforms;
-      const outputW = p.outputWidth;
-      const outputH = p.outputHeight;
-      const inputW = p.inputWidth;
-      const inputH = p.inputHeight;
-      const coord = d.vec2i(x, y);
-      const coordXf = d.f32(coord.x);
-      const coordYf = d.f32(coord.y);
+        const p = fisheyeLayout.$.uniforms;
+        const outputW = p.outputWidth;
+        const outputH = p.outputHeight;
+        const inputW = p.inputWidth;
+        const inputH = p.inputHeight;
+        const coord = d.vec2i(x, y);
+        const coordXf = d.f32(coord.x);
+        const coordYf = d.f32(coord.y);
 
-      if (coordXf >= outputW || coordYf >= outputH) {
-        return;
-      }
+        if (coordXf >= outputW || coordYf >= outputH) return;
 
-      // Original projection (pass-through with bilinear interpolation)
-      // projection: 0=rectilinear, 1=equirectangular, 2=original, 3=cylindrical
-      if (p.projection > 1.5 && p.projection < 2.5) {
-        const srcX = (coordXf / outputW) * inputW;
-        const srcY = (coordYf / outputH) * inputH;
+        // projection: 0=rectilinear, 1=equirectangular, 2=original, 3=cylindrical
+        const isOriginal = p.projection > 1.5 && p.projection < 2.5;
+        let u: typeof p.newCx;
+        let v: typeof p.newCy;
+        let inBounds: boolean;
 
-        const x0 = std.floor(srcX);
-        const y0 = std.floor(srcY);
-        const fx = srcX - x0;
-        const fy = srcY - y0;
-
-        const maxX = inputW - 1.0;
-        const maxY = inputH - 1.0;
-        const ix0 = d.i32(std.clamp(x0, 0.0, maxX));
-        const iy0 = d.i32(std.clamp(y0, 0.0, maxY));
-        const ix1 = d.i32(std.clamp(x0 + 1.0, 0.0, maxX));
-        const iy1 = d.i32(std.clamp(y0 + 1.0, 0.0, maxY));
-
-        const c00 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy0), 0);
-        const c10 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy0), 0);
-        const c01 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy1), 0);
-        const c11 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy1), 0);
-
-        const c0 = std.mix(c00, c10, fx);
-        const c1 = std.mix(c01, c11, fx);
-        const color = std.mix(c0, c1, fy);
-
-        std.textureStore(fisheyeLayout.$.outputTexture, coord, color);
-        return;
-      }
-
-      // Step 1: Projection → normalized coordinates
-      let normX = (coordXf - p.newCx) / p.newFx;
-      let normY = (coordYf - p.newCy) / p.newFy;
-      let validProjection = true;
-
-      // Equirectangular projection (projection == 1)
-      if (p.projection > 0.5 && p.projection < 1.5) {
-        const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
-        const lat = (coordYf / outputH - 0.5) * Math.PI;
-        const cosLat = std.cos(lat);
-        const dirX = std.sin(lon) * cosLat;
-        const dirY = std.sin(lat);
-        const dirZ = std.cos(lon) * cosLat;
-
-        if (dirZ <= 0.001) {
-          validProjection = false;
-          normX = 0.0;
-          normY = 0.0;
+        if (isOriginal) {
+          u = (coordXf / outputW) * inputW;
+          v = (coordYf / outputH) * inputH;
+          inBounds = true;
         } else {
-          normX = dirX / dirZ;
-          normY = dirY / dirZ;
+          let normX = (coordXf - p.newCx) / p.newFx;
+          let normY = (coordYf - p.newCy) / p.newFy;
+          let validProjection = true;
+
+          const isEquirect = p.projection > 0.5 && p.projection < 1.5;
+          if (isEquirect) {
+            const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
+            const lat = (coordYf / outputH - 0.5) * Math.PI;
+            const cosLat = std.cos(lat);
+            const dirZ = std.cos(lon) * cosLat;
+            validProjection = dirZ > 0.001;
+            normX = validProjection ? (std.sin(lon) * cosLat) / dirZ : 0.0;
+            normY = validProjection ? std.sin(lat) / dirZ : 0.0;
+          }
+
+          const isCylindrical = p.projection > 2.5;
+          if (isCylindrical) {
+            const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
+            const yNorm = (coordYf / outputH - 0.5) * 2.0;
+            const dirZ = std.cos(lon);
+            validProjection = dirZ > 0.001;
+            normX = validProjection ? std.sin(lon) / dirZ : 0.0;
+            normY = validProjection ? yNorm / dirZ : 0.0;
+          }
+
+          const r = std.sqrt(normX * normX + normY * normY);
+          const theta = std.atan(r);
+          const theta2 = theta * theta;
+          const theta4 = theta2 * theta2;
+          const theta6 = theta4 * theta2;
+          const theta8 = theta4 * theta4;
+          const thetaD =
+            theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
+          const safeR = std.max(r, 1e-8);
+          const scale = thetaD / safeR;
+          const distortedX = normX * scale;
+          const distortedY = normY * scale;
+          u = p.fx * (distortedX + p.alpha * distortedY) + p.cx;
+          v = p.fy * distortedY + p.cy;
+          inBounds =
+            validProjection && u >= 0.0 && u <= inputW - 1.0 && v >= 0.0 && v <= inputH - 1.0;
         }
-      }
 
-      // Cylindrical projection (projection == 3)
-      if (p.projection > 2.5) {
-        const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
-        const yNorm = (coordYf / outputH - 0.5) * 2.0;
-        const dirX = std.sin(lon);
-        const dirZ = std.cos(lon);
-
-        if (dirZ <= 0.001) {
-          validProjection = false;
-          normX = 0.0;
-          normY = 0.0;
-        } else {
-          normX = dirX / dirZ;
-          normY = yNorm / dirZ;
+        if (!inBounds) {
+          std.textureStore(fisheyeLayout.$.outputTexture, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
+          return;
         }
-      }
 
-      // Step 2: Apply fisheye distortion (OpenCV forward model)
-      // θ_d = θ(1 + k₁θ² + k₂θ⁴ + k₃θ⁶ + k₄θ⁸)
-      const r = std.sqrt(normX * normX + normY * normY);
-      const theta = std.atan(r);
-      const theta2 = theta * theta;
-      const theta4 = theta2 * theta2;
-      const theta6 = theta4 * theta2;
-      const theta8 = theta4 * theta4;
-      const thetaD = theta * (1.0 + p.k1 * theta2 + p.k2 * theta4 + p.k3 * theta6 + p.k4 * theta8);
-      const safeR = std.max(r, 1e-8);
-      const scale = thetaD / safeR;
-      const distortedX = normX * scale;
-      const distortedY = normY * scale;
-
-      // Step 3: Convert to input pixel coordinates
-      // u = fx·(x' + α·y') + cx, v = fy·y' + cy
-      const u = p.fx * (distortedX + p.alpha * distortedY) + p.cx;
-      const v = p.fy * distortedY + p.cy;
-
-      // Step 4: Bilinear interpolation and store
-      // Use pixel coordinates directly (OpenCV convention: pixel (i,j) is at position (i,j))
-      const inBounds =
-        validProjection && u >= 0.0 && u <= inputW - 1.0 && v >= 0.0 && v <= inputH - 1.0;
-      if (inBounds) {
-        // Get integer and fractional parts
         const x0 = std.floor(u);
         const y0 = std.floor(v);
         const fx = u - x0;
         const fy = v - y0;
-
-        // Clamp coordinates to valid range
         const maxX = inputW - 1.0;
         const maxY = inputH - 1.0;
         const ix0 = d.i32(std.clamp(x0, 0.0, maxX));
         const iy0 = d.i32(std.clamp(y0, 0.0, maxY));
         const ix1 = d.i32(std.clamp(x0 + 1.0, 0.0, maxX));
         const iy1 = d.i32(std.clamp(y0 + 1.0, 0.0, maxY));
-
-        // Load 4 neighboring pixels
         const c00 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy0), 0);
         const c10 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy0), 0);
         const c01 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix0, iy1), 0);
         const c11 = std.textureLoad(fisheyeLayout.$.inputTexture, d.vec2i(ix1, iy1), 0);
-
-        // Bilinear interpolation
         const c0 = std.mix(c00, c10, fx);
         const c1 = std.mix(c01, c11, fx);
         const color = std.mix(c0, c1, fy);
-
         std.textureStore(fisheyeLayout.$.outputTexture, coord, color);
-      } else {
-        std.textureStore(fisheyeLayout.$.outputTexture, coord, d.vec4f(0.0, 0.0, 0.0, 1.0));
-      }
-    });
+      },
+    );
   }
 
   private getUniformData(): d.Infer<typeof FisheyeUniforms> {
