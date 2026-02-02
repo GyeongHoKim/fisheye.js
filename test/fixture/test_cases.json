@@ -1,10 +1,10 @@
 [
   {
     "camera_id": 1,
-    "scenario": "rectilinear_balanced",
-    "description": "Rectilinear projection with balanced FOV (typical surveillance/webcam use)",
-    "original_image_path": "cam1_original.jpg",
-    "dewarped_image_path": "cam1_rectilinear_balanced.jpg",
+    "scenario": "rectilinear_natural",
+    "description": "Natural rectilinear projection preserving original focal length",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/natural/cam1_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
     "output_width": 3264,
@@ -22,21 +22,23 @@
       "k4": -0.00107043
     },
     "projection": "rectilinear",
-    "balance": 0.5,
+    "balance": 0.0,
     "fov_scale": 1.0,
     "new_camera_matrix": {
-      "fx": 89.21730931674149,
-      "fy": 89.21730931674149,
-      "cx": 1652.0,
-      "cy": 1647.0
-    }
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
   },
   {
     "camera_id": 1,
-    "scenario": "rectilinear_full_fov",
-    "description": "Rectilinear projection preserving full FOV (maximum coverage)",
-    "original_image_path": "cam1_original.jpg",
-    "dewarped_image_path": "cam1_rectilinear_full_fov.jpg",
+    "scenario": "rectilinear_manual_fx_original",
+    "description": "Manual newFx = original fx (991) - Natural look",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/original/cam1_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
     "output_width": 3264,
@@ -54,25 +56,27 @@
       "k4": -0.00107043
     },
     "projection": "rectilinear",
-    "balance": 1.0,
+    "balance": 0.0,
     "fov_scale": 1.0,
     "new_camera_matrix": {
-      "fx": 89.21730931674149,
-      "fy": 89.21730931674149,
-      "cx": 1652.0,
-      "cy": 1647.0
-    }
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
   },
   {
     "camera_id": 1,
-    "scenario": "rectilinear_zoomed",
-    "description": "Rectilinear projection with zoom for detail (video conferencing)",
-    "original_image_path": "cam1_original.jpg",
-    "dewarped_image_path": "cam1_rectilinear_zoomed.jpg",
+    "scenario": "rectilinear_manual_fx_120pct",
+    "description": "Manual newFx = 120% of original (1189.2) - Zoomed in",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/120pct/cam1_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
-    "output_width": 1632,
-    "output_height": 1632,
+    "output_width": 3264,
+    "output_height": 3264,
     "camera_matrix": {
       "fx": 991.0,
       "fy": 991.0,
@@ -86,21 +90,159 @@
       "k4": -0.00107043
     },
     "projection": "rectilinear",
-    "balance": 0.5,
-    "fov_scale": 0.7,
+    "balance": 0.0,
+    "fov_scale": 1.0,
     "new_camera_matrix": {
-      "fx": 63.72664951195821,
-      "fy": 63.72664951195821,
-      "cx": 830.2857142857142,
-      "cy": 826.7142857142857
-    }
+      "fx": 1189.2,
+      "fy": 1189.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 1189.2,
+    "manual_fy": 1189.2
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_80pct",
+    "description": "Manual newFx = 80% of original (792.8) - Slightly wider",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/80pct/cam1_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 792.8,
+      "fy": 792.8,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 792.8,
+    "manual_fy": 792.8
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_60pct",
+    "description": "Manual newFx = 60% of original (594.6) - Wider FOV",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/60pct/cam1_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 594.6,
+      "fy": 594.6,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 594.6,
+    "manual_fy": 594.6
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_40pct",
+    "description": "Manual newFx = 40% of original (396.4) - Very wide FOV",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/40pct/cam1_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 396.4,
+      "fy": 396.4,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 396.4,
+    "manual_fy": 396.4
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_20pct",
+    "description": "Manual newFx = 20% of original (198.2) - Extremely wide FOV",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/20pct/cam1_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 198.2,
+      "fy": 198.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 198.2,
+    "manual_fy": 198.2
   },
   {
     "camera_id": 1,
     "scenario": "equirectangular_panorama",
     "description": "Equirectangular projection for 360 panorama stitching",
-    "original_image_path": "cam1_original.jpg",
-    "dewarped_image_path": "cam1_equirectangular_panorama.jpg",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "equirectangular/panorama/cam1_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
     "output_width": 3264,
@@ -122,11 +264,617 @@
     "fov_scale": 1.0
   },
   {
+    "camera_id": 1,
+    "scenario": "cylindrical_panorama",
+    "description": "Cylindrical projection for panorama (unrolled cylinder)",
+    "original_image_path": "original/cam1_01.jpg",
+    "dewarped_image_path": "cylindrical/panorama/cam1_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "cylindrical",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_natural",
+    "description": "Natural rectilinear projection preserving original focal length",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/natural/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_original",
+    "description": "Manual newFx = original fx (991) - Natural look",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/original/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_120pct",
+    "description": "Manual newFx = 120% of original (1189.2) - Zoomed in",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/120pct/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 1189.2,
+      "fy": 1189.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 1189.2,
+    "manual_fy": 1189.2
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_80pct",
+    "description": "Manual newFx = 80% of original (792.8) - Slightly wider",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/80pct/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 792.8,
+      "fy": 792.8,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 792.8,
+    "manual_fy": 792.8
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_60pct",
+    "description": "Manual newFx = 60% of original (594.6) - Wider FOV",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/60pct/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 594.6,
+      "fy": 594.6,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 594.6,
+    "manual_fy": 594.6
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_40pct",
+    "description": "Manual newFx = 40% of original (396.4) - Very wide FOV",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/40pct/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 396.4,
+      "fy": 396.4,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 396.4,
+    "manual_fy": 396.4
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_20pct",
+    "description": "Manual newFx = 20% of original (198.2) - Extremely wide FOV",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/20pct/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 198.2,
+      "fy": 198.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 198.2,
+    "manual_fy": 198.2
+  },
+  {
+    "camera_id": 1,
+    "scenario": "equirectangular_panorama",
+    "description": "Equirectangular projection for 360 panorama stitching",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "equirectangular/panorama/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "cylindrical_panorama",
+    "description": "Cylindrical projection for panorama (unrolled cylinder)",
+    "original_image_path": "original/cam1_02.jpg",
+    "dewarped_image_path": "cylindrical/panorama/cam1_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "cylindrical",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_natural",
+    "description": "Natural rectilinear projection preserving original focal length",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/natural/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_original",
+    "description": "Manual newFx = original fx (991) - Natural look",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/original/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_120pct",
+    "description": "Manual newFx = 120% of original (1189.2) - Zoomed in",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/120pct/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 1189.2,
+      "fy": 1189.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 1189.2,
+    "manual_fy": 1189.2
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_80pct",
+    "description": "Manual newFx = 80% of original (792.8) - Slightly wider",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/80pct/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 792.8,
+      "fy": 792.8,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 792.8,
+    "manual_fy": 792.8
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_60pct",
+    "description": "Manual newFx = 60% of original (594.6) - Wider FOV",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/60pct/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 594.6,
+      "fy": 594.6,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 594.6,
+    "manual_fy": 594.6
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_40pct",
+    "description": "Manual newFx = 40% of original (396.4) - Very wide FOV",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/40pct/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 396.4,
+      "fy": 396.4,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 396.4,
+    "manual_fy": 396.4
+  },
+  {
+    "camera_id": 1,
+    "scenario": "rectilinear_manual_fx_20pct",
+    "description": "Manual newFx = 20% of original (198.2) - Extremely wide FOV",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/20pct/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 198.2,
+      "fy": 198.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 198.2,
+    "manual_fy": 198.2
+  },
+  {
+    "camera_id": 1,
+    "scenario": "equirectangular_panorama",
+    "description": "Equirectangular projection for 360 panorama stitching",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "equirectangular/panorama/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 1,
+    "scenario": "cylindrical_panorama",
+    "description": "Cylindrical projection for panorama (unrolled cylinder)",
+    "original_image_path": "original/cam1_03.jpg",
+    "dewarped_image_path": "cylindrical/panorama/cam1_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.03562009,
+      "k2": -0.02587979,
+      "k3": 0.00564249,
+      "k4": -0.00107043
+    },
+    "projection": "cylindrical",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
     "camera_id": 2,
-    "scenario": "rectilinear_balanced",
-    "description": "Rectilinear projection with balanced FOV (typical surveillance/webcam use)",
-    "original_image_path": "cam2_original.jpg",
-    "dewarped_image_path": "cam2_rectilinear_balanced.jpg",
+    "scenario": "rectilinear_natural",
+    "description": "Natural rectilinear projection preserving original focal length",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/natural/cam2_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
     "output_width": 3264,
@@ -144,21 +892,23 @@
       "k4": 0.00455207
     },
     "projection": "rectilinear",
-    "balance": 0.5,
+    "balance": 0.0,
     "fov_scale": 1.0,
     "new_camera_matrix": {
-      "fx": 6.775532347311902,
-      "fy": 6.775532347311902,
-      "cx": 1652.0,
-      "cy": 1647.0
-    }
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
   },
   {
     "camera_id": 2,
-    "scenario": "rectilinear_full_fov",
-    "description": "Rectilinear projection preserving full FOV (maximum coverage)",
-    "original_image_path": "cam2_original.jpg",
-    "dewarped_image_path": "cam2_rectilinear_full_fov.jpg",
+    "scenario": "rectilinear_manual_fx_original",
+    "description": "Manual newFx = original fx (991) - Natural look",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/original/cam2_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
     "output_width": 3264,
@@ -176,25 +926,27 @@
       "k4": 0.00455207
     },
     "projection": "rectilinear",
-    "balance": 1.0,
+    "balance": 0.0,
     "fov_scale": 1.0,
     "new_camera_matrix": {
-      "fx": 6.775532347311901,
-      "fy": 6.775532347311901,
-      "cx": 1652.0,
-      "cy": 1647.0
-    }
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
   },
   {
     "camera_id": 2,
-    "scenario": "rectilinear_zoomed",
-    "description": "Rectilinear projection with zoom for detail (video conferencing)",
-    "original_image_path": "cam2_original.jpg",
-    "dewarped_image_path": "cam2_rectilinear_zoomed.jpg",
+    "scenario": "rectilinear_manual_fx_120pct",
+    "description": "Manual newFx = 120% of original (1189.2) - Zoomed in",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/120pct/cam2_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
-    "output_width": 1632,
-    "output_height": 1632,
+    "output_width": 3264,
+    "output_height": 3264,
     "camera_matrix": {
       "fx": 991.0,
       "fy": 991.0,
@@ -208,21 +960,159 @@
       "k4": 0.00455207
     },
     "projection": "rectilinear",
-    "balance": 0.5,
-    "fov_scale": 0.7,
+    "balance": 0.0,
+    "fov_scale": 1.0,
     "new_camera_matrix": {
-      "fx": 4.839665962365644,
-      "fy": 4.839665962365644,
-      "cx": 830.2857142857143,
-      "cy": 826.7142857142857
-    }
+      "fx": 1189.2,
+      "fy": 1189.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 1189.2,
+    "manual_fy": 1189.2
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_80pct",
+    "description": "Manual newFx = 80% of original (792.8) - Slightly wider",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/80pct/cam2_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 792.8,
+      "fy": 792.8,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 792.8,
+    "manual_fy": 792.8
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_60pct",
+    "description": "Manual newFx = 60% of original (594.6) - Wider FOV",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/60pct/cam2_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 594.6,
+      "fy": 594.6,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 594.6,
+    "manual_fy": 594.6
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_40pct",
+    "description": "Manual newFx = 40% of original (396.4) - Very wide FOV",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/40pct/cam2_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 396.4,
+      "fy": 396.4,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 396.4,
+    "manual_fy": 396.4
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_20pct",
+    "description": "Manual newFx = 20% of original (198.2) - Extremely wide FOV",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/20pct/cam2_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 198.2,
+      "fy": 198.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 198.2,
+    "manual_fy": 198.2
   },
   {
     "camera_id": 2,
     "scenario": "equirectangular_panorama",
     "description": "Equirectangular projection for 360 panorama stitching",
-    "original_image_path": "cam2_original.jpg",
-    "dewarped_image_path": "cam2_equirectangular_panorama.jpg",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "equirectangular/panorama/cam2_01.jpg",
     "image_width": 3264,
     "image_height": 3264,
     "output_width": 3264,
@@ -240,6 +1130,612 @@
       "k4": 0.00455207
     },
     "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "cylindrical_panorama",
+    "description": "Cylindrical projection for panorama (unrolled cylinder)",
+    "original_image_path": "original/cam2_01.jpg",
+    "dewarped_image_path": "cylindrical/panorama/cam2_01.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "cylindrical",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_natural",
+    "description": "Natural rectilinear projection preserving original focal length",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/natural/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_original",
+    "description": "Manual newFx = original fx (991) - Natural look",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/original/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_120pct",
+    "description": "Manual newFx = 120% of original (1189.2) - Zoomed in",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/120pct/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 1189.2,
+      "fy": 1189.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 1189.2,
+    "manual_fy": 1189.2
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_80pct",
+    "description": "Manual newFx = 80% of original (792.8) - Slightly wider",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/80pct/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 792.8,
+      "fy": 792.8,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 792.8,
+    "manual_fy": 792.8
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_60pct",
+    "description": "Manual newFx = 60% of original (594.6) - Wider FOV",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/60pct/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 594.6,
+      "fy": 594.6,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 594.6,
+    "manual_fy": 594.6
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_40pct",
+    "description": "Manual newFx = 40% of original (396.4) - Very wide FOV",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/40pct/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 396.4,
+      "fy": 396.4,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 396.4,
+    "manual_fy": 396.4
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_20pct",
+    "description": "Manual newFx = 20% of original (198.2) - Extremely wide FOV",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/20pct/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 198.2,
+      "fy": 198.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 198.2,
+    "manual_fy": 198.2
+  },
+  {
+    "camera_id": 2,
+    "scenario": "equirectangular_panorama",
+    "description": "Equirectangular projection for 360 panorama stitching",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "equirectangular/panorama/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "cylindrical_panorama",
+    "description": "Cylindrical projection for panorama (unrolled cylinder)",
+    "original_image_path": "original/cam2_02.jpg",
+    "dewarped_image_path": "cylindrical/panorama/cam2_02.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "cylindrical",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_natural",
+    "description": "Natural rectilinear projection preserving original focal length",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/natural/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_original",
+    "description": "Manual newFx = original fx (991) - Natural look",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/original/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 991.0,
+    "manual_fy": 991.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_120pct",
+    "description": "Manual newFx = 120% of original (1189.2) - Zoomed in",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/120pct/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 1189.2,
+      "fy": 1189.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 1189.2,
+    "manual_fy": 1189.2
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_80pct",
+    "description": "Manual newFx = 80% of original (792.8) - Slightly wider",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/80pct/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 792.8,
+      "fy": 792.8,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 792.8,
+    "manual_fy": 792.8
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_60pct",
+    "description": "Manual newFx = 60% of original (594.6) - Wider FOV",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/60pct/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 594.6,
+      "fy": 594.6,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 594.6,
+    "manual_fy": 594.6
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_40pct",
+    "description": "Manual newFx = 40% of original (396.4) - Very wide FOV",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/40pct/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 396.4,
+      "fy": 396.4,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 396.4,
+    "manual_fy": 396.4
+  },
+  {
+    "camera_id": 2,
+    "scenario": "rectilinear_manual_fx_20pct",
+    "description": "Manual newFx = 20% of original (198.2) - Extremely wide FOV",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "rectilinear/manual_fx/20pct/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "rectilinear",
+    "balance": 0.0,
+    "fov_scale": 1.0,
+    "new_camera_matrix": {
+      "fx": 198.2,
+      "fy": 198.2,
+      "cx": 1632.0,
+      "cy": 1632.0
+    },
+    "manual_fx": 198.2,
+    "manual_fy": 198.2
+  },
+  {
+    "camera_id": 2,
+    "scenario": "equirectangular_panorama",
+    "description": "Equirectangular projection for 360 panorama stitching",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "equirectangular/panorama/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "equirectangular",
+    "balance": 0.0,
+    "fov_scale": 1.0
+  },
+  {
+    "camera_id": 2,
+    "scenario": "cylindrical_panorama",
+    "description": "Cylindrical projection for panorama (unrolled cylinder)",
+    "original_image_path": "original/cam2_03.jpg",
+    "dewarped_image_path": "cylindrical/panorama/cam2_03.jpg",
+    "image_width": 3264,
+    "image_height": 3264,
+    "output_width": 3264,
+    "output_height": 3264,
+    "camera_matrix": {
+      "fx": 991.0,
+      "fy": 991.0,
+      "cx": 1612.0,
+      "cy": 1617.0
+    },
+    "distortion_coefficients": {
+      "k1": 0.02494321,
+      "k2": 0.0049985,
+      "k3": -0.01754164,
+      "k4": 0.00455207
+    },
+    "projection": "cylindrical",
     "balance": 0.0,
     "fov_scale": 1.0
   }

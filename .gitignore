@@ -36,3 +36,4 @@ test-results
 temp/
 tmp/
 test/fixture/venv/
+test/fixture/.venv/
