@@ -288,9 +288,9 @@ export class Fisheye {
 
         // projection: 0=rectilinear, 1=equirectangular, 2=original, 3=cylindrical
         const isOriginal = p.projection > 1.5 && p.projection < 2.5;
-        let u: typeof p.newCx;
-        let v: typeof p.newCy;
-        let inBounds: boolean;
+        let u = d.f32(0.0);
+        let v = d.f32(0.0);
+        let inBounds = false;
 
         if (isOriginal) {
           u = (coordXf / outputW) * inputW;
