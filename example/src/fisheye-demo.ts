@@ -7,34 +7,87 @@ import { WebGPURenderer } from "./renderer";
 import "./demo-sidebar";
 import "./page-header";
 
-const FISHEYE_DEFAULTS = {
-  k1: -0.0014613319981768,
-  k2: -0.00329861110580401,
-  k3: 0.00605760088590183,
-  k4: -0.00374209380722371,
-  centerX: -0.0306,
-  centerY: -0.0452,
+/** Reference size for calibration (test/fixture images are 3264×3264). */
+const CALIBRATION_REF_SIZE = 3264;
+
+/** Calibration shape (K + D + balance/fovScale) from test_cases.json. */
+interface DemoCalibration {
+  fx: number;
+  fy: number;
+  cx: number;
+  cy: number;
+  k1: number;
+  k2: number;
+  k3: number;
+  k4: number;
+  balance: number;
+  fovScale: number;
+}
+
+/** Camera 1 calibration from test_cases.json (rectilinear_natural, cam1_01). */
+const CAM1_CALIBRATION: DemoCalibration = {
+  fx: 991.0,
+  fy: 991.0,
+  cx: 1612.0,
+  cy: 1617.0,
+  k1: 0.03562009,
+  k2: -0.02587979,
+  k3: 0.00564249,
+  k4: -0.00107043,
   balance: 0.0,
-  fovScale: 0.66,
+  fovScale: 1.0,
+};
+
+/** Camera 2 calibration from test_cases.json (rectilinear_natural, cam2_01). */
+const CAM2_CALIBRATION: DemoCalibration = {
+  fx: 991.0,
+  fy: 991.0,
+  cx: 1612.0,
+  cy: 1617.0,
+  k1: 0.02494321,
+  k2: 0.0049985,
+  k3: -0.01754164,
+  k4: 0.00455207,
+  balance: 0.0,
+  fovScale: 1.0,
+};
+
+const FISHEYE_DEFAULTS = {
+  ...CAM1_CALIBRATION,
   projection: { kind: "rectilinear" } as const satisfies FisheyeProjection,
 };
 
-/** Presets map user-facing names to projection modes. */
+/** Sample images from test/fixture/original (copied to example/public/samples). */
+const SAMPLE_IMAGES = [
+  { id: "cam1_01", label: "Cam 1-01", src: "samples/cam1_01.jpg" },
+  { id: "cam1_02", label: "Cam 1-02", src: "samples/cam1_02.jpg" },
+  { id: "cam1_03", label: "Cam 1-03", src: "samples/cam1_03.jpg" },
+  { id: "cam2_01", label: "Cam 2-01", src: "samples/cam2_01.jpg" },
+  { id: "cam2_02", label: "Cam 2-02", src: "samples/cam2_02.jpg" },
+  { id: "cam2_03", label: "Cam 2-03", src: "samples/cam2_03.jpg" },
+] as const;
+
+/** Presets map user-facing names to projection modes (all library projection kinds). */
 const VIEW_PRESETS = [
   {
-    id: "normal",
-    label: "Normal (90°)",
+    id: "rectilinear",
+    label: "Rectilinear (90°)",
     projection: { kind: "rectilinear" } as const satisfies FisheyeProjection,
   },
   {
-    id: "panoramic180",
-    label: "Panoramic 180°",
+    id: "equirectangular",
+    label: "Equirectangular",
     projection: { kind: "equirectangular" } as const satisfies FisheyeProjection,
   },
   {
-    id: "panoramic360",
-    label: "360° Panorama",
-    projection: { kind: "equirectangular" } as const satisfies FisheyeProjection,
+    id: "original",
+    label: "Original",
+    projection: { kind: "original" } as const satisfies FisheyeProjection,
+  },
+  {
+    id: "cylindrical",
+    label: "Cylindrical",
+    projection: { kind: "cylindrical" } as const satisfies FisheyeProjection,
   },
 ] as const;
 type PresetId = (typeof VIEW_PRESETS)[number]["id"];
@@ -47,14 +100,13 @@ export class FisheyeDemo extends LitElement {
   @state() private k4 = FISHEYE_DEFAULTS.k4;
   @state() private balance = FISHEYE_DEFAULTS.balance;
   @state() private fovScale = FISHEYE_DEFAULTS.fovScale;
-  @state() private centerX = FISHEYE_DEFAULTS.centerX;
-  @state() private centerY = FISHEYE_DEFAULTS.centerY;
   @state() private presetId: PresetId | null = null;
   @state() private projection: FisheyeProjection = FISHEYE_DEFAULTS.projection;
   @state() private isProcessing = false;
   @state() private errorMessage = "";
   @state() private hasWebGPU = true;
   @state() private sidebarOpen = true;
+  @state() private selectedSampleId: string | null = "cam1_01";
 
   @query("#output-canvas") private outputCanvas!: HTMLCanvasElement;
   @query("#input-canvas") private inputCanvas!: HTMLCanvasElement;
@@ -65,6 +117,8 @@ export class FisheyeDemo extends LitElement {
 
   private processImagePromise: Promise<void> = Promise.resolve();
   private processImageDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Incremented on each sample/file load; only the matching processImage run may draw to output. */
+  private loadRequestId = 0;
 
   private static readonly PROCESS_IMAGE_DEBOUNCE_MS = 200;
 
@@ -97,20 +151,25 @@ export class FisheyeDemo extends LitElement {
 
   private async loadDefaultImage() {
     try {
-      const imgResponse = await fetch(`${import.meta.env.BASE_URL}test.jpg?t=${Date.now()}`);
+      const firstSample = SAMPLE_IMAGES[0];
+      this.applyCalibrationFromSample(firstSample.id);
+      const imgResponse = await fetch(
+        `${import.meta.env.BASE_URL}${firstSample.src}?t=${Date.now()}`,
+      );
       const blob = await imgResponse.blob();
       await this.loadImage(blob);
+      this.selectedSampleId = firstSample.id;
     } catch (e) {
       console.warn("Failed to load default image:", e);
     }
   }
 
-  private async loadImage(blob: Blob) {
+  private async loadImage(blob: Blob, sampleIdForCalibration?: string) {
     try {
+      const requestId = ++this.loadRequestId;
       this.currentImageBitmap?.close();
       this.currentImageBitmap = await createImageBitmap(blob);
 
-      // Draw input image to input canvas
       await this.updateComplete;
       const ctx = this.inputCanvas.getContext("2d");
       if (ctx) {
@@ -119,8 +178,16 @@ export class FisheyeDemo extends LitElement {
         ctx.drawImage(this.currentImageBitmap, 0, 0);
       }
 
-      // Process the image (serialized with any pending run)
-      await this.enqueueProcessImage();
+      const imageToProcess = this.currentImageBitmap;
+      await this.processImagePromise;
+      if (requestId !== this.loadRequestId) return;
+      this.processImagePromise = this.processImage(
+        imageToProcess,
+        sampleIdForCalibration,
+        requestId,
+      ).catch(() => {});
+      await this.processImagePromise;
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
     } catch (e) {
       this.errorMessage = `Failed to load image: ${e}`;
     }
@@ -130,34 +197,97 @@ export class FisheyeDemo extends LitElement {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (file) {
+      this.selectedSampleId = null;
       await this.loadImage(file);
     }
   }
 
-  private async processImage() {
-    if (!this.currentImageBitmap || !this.hasWebGPU) return;
+  private getCalibrationForCurrentSample(): DemoCalibration {
+    const id = this.selectedSampleId ?? "cam1_01";
+    return id.startsWith("cam2_") ? CAM2_CALIBRATION : CAM1_CALIBRATION;
+  }
+
+  private buildFisheyeOptions(w: number, h: number, sampleIdForCalibration?: string) {
+    const cal =
+      sampleIdForCalibration !== undefined
+        ? sampleIdForCalibration.startsWith("cam2_")
+          ? CAM2_CALIBRATION
+          : CAM1_CALIBRATION
+        : this.getCalibrationForCurrentSample();
+    const scaleX = w / CALIBRATION_REF_SIZE;
+    const scaleY = h / CALIBRATION_REF_SIZE;
+    const projection =
+      this.projection.kind === "rectilinear"
+        ? {
+            kind: "rectilinear" as const,
+            mode: "manual" as const,
+            newFx: cal.fx * scaleX,
+            newFy: cal.fy * scaleY,
+            newCx: w / 2,
+            newCy: h / 2,
+          }
+        : this.projection;
+    return {
+      fx: cal.fx * scaleX,
+      fy: cal.fy * scaleY,
+      cx: cal.cx * scaleX,
+      cy: cal.cy * scaleY,
+      k1: this.k1,
+      k2: this.k2,
+      k3: this.k3,
+      k4: this.k4,
+      width: w,
+      height: h,
+      balance: this.balance,
+      fovScale: this.fovScale,
+      projection,
+    };
+  }
+
+  private applyCalibrationFromSample(sampleId: string) {
+    const cal = sampleId.startsWith("cam2_") ? CAM2_CALIBRATION : CAM1_CALIBRATION;
+    this.k1 = cal.k1;
+    this.k2 = cal.k2;
+    this.k3 = cal.k3;
+    this.k4 = cal.k4;
+    this.balance = cal.balance;
+    this.fovScale = cal.fovScale;
+  }
+
+  private async handleSampleSelect(sample: (typeof SAMPLE_IMAGES)[number]) {
+    try {
+      this.selectedSampleId = sample.id;
+      this.applyCalibrationFromSample(sample.id);
+      await this.updateComplete;
+      const imgResponse = await fetch(`${import.meta.env.BASE_URL}${sample.src}?t=${Date.now()}`);
+      const blob = await imgResponse.blob();
+      await this.loadImage(blob, sample.id);
+    } catch (_e) {
+      this.errorMessage = `Failed to load sample: ${sample.label}`;
+    }
+  }
+
+  private async processImage(
+    image?: ImageBitmap | null,
+    sampleIdForCalibration?: string,
+    requestId?: number,
+  ) {
+    const bitmap = image ?? this.currentImageBitmap;
+    if (!bitmap || !this.hasWebGPU) return;
 
     this.isProcessing = true;
     this.errorMessage = "";
 
     try {
       await this.updateComplete;
+      if (requestId !== undefined && requestId !== this.loadRequestId) {
+        this.isProcessing = false;
+        return;
+      }
 
-      const w = this.currentImageBitmap.width;
-      const h = this.currentImageBitmap.height;
-      const fisheyeOptions = {
-        k1: this.k1,
-        k2: this.k2,
-        k3: this.k3,
-        k4: this.k4,
-        width: w,
-        height: h,
-        balance: this.balance,
-        fovScale: this.fovScale,
-        projection: this.projection,
-        cx: w * (0.5 + this.centerX),
-        cy: h * (0.5 + this.centerY),
-      };
+      const w = bitmap.width;
+      const h = bitmap.height;
+      const fisheyeOptions = this.buildFisheyeOptions(w, h, sampleIdForCalibration);
 
       // Initialize fisheye if needed
       if (!this.fisheye) {
@@ -171,8 +301,8 @@ export class FisheyeDemo extends LitElement {
         this.renderer = new WebGPURenderer(this.outputCanvas);
       }
 
-      // Create VideoFrame from ImageBitmap
-      const inputFrame = new VideoFrame(this.currentImageBitmap, {
+      // Create VideoFrame from the image we were asked to process
+      const inputFrame = new VideoFrame(bitmap, {
         timestamp: 0,
       });
       let outputFrame: VideoFrame | null = null;
@@ -184,9 +314,11 @@ export class FisheyeDemo extends LitElement {
         inputFrame.close();
         inputClosed = true;
 
-        // Render the result (draw() closes outputFrame)
-        await this.renderer.draw(outputFrame);
-        outputFrame = null;
+        // Only draw to output if this run is still the latest load (avoids one-frame lag)
+        if (requestId === undefined || requestId === this.loadRequestId) {
+          await this.renderer.draw(outputFrame);
+          outputFrame = null;
+        }
       } finally {
         if (!inputClosed) inputFrame.close();
         outputFrame?.close();
@@ -250,8 +382,6 @@ export class FisheyeDemo extends LitElement {
     this.k2 = FISHEYE_DEFAULTS.k2;
     this.k3 = FISHEYE_DEFAULTS.k3;
     this.k4 = FISHEYE_DEFAULTS.k4;
-    this.centerX = FISHEYE_DEFAULTS.centerX;
-    this.centerY = FISHEYE_DEFAULTS.centerY;
     this.fisheye = null;
     this.loadDefaultImage();
   }
@@ -274,6 +404,22 @@ export class FisheyeDemo extends LitElement {
                   : html`
                     <div class="control-group">
                       <h3>Image</h3>
+                      <p class="control-hint">Pick a sample or upload your own file.</p>
+                      <div class="sample-thumbnails">
+                        ${SAMPLE_IMAGES.map(
+                          (s) => html`
+                            <button
+                              type="button"
+                              class="sample-thumb ${this.selectedSampleId === s.id ? "active" : ""}"
+                              title=${s.label}
+                              @click=${() => this.handleSampleSelect(s)}
+                            >
+                              <img src="${import.meta.env.BASE_URL}${s.src}" alt=${s.label} loading="lazy" />
+                              <span>${s.label}</span>
+                            </button>
+                          `,
+                        )}
+                      </div>
                       <div class="file-input-wrapper">
                         <input
                           type="file"
@@ -318,8 +464,6 @@ export class FisheyeDemo extends LitElement {
                       <p class="control-hint">balance: 0 = no black edges, 1 = keep original FOV. fovScale: &gt;1 = widen FOV, &lt;1 = narrow FOV.</p>
                       ${this.renderSlider("balance", this.balance, 0, 1, 0.01)}
                       ${this.renderSlider("fovScale", this.fovScale, 0.1, 3, 0.01)}
-                      ${this.renderSlider("centerX", this.centerX, -0.5, 0.5, 0.001)}
-                      ${this.renderSlider("centerY", this.centerY, -0.5, 0.5, 0.001)}
                     </div>
 
                     <div class="control-group">

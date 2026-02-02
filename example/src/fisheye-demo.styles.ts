@@ -100,6 +100,56 @@ export const fisheyeDemoStyles = css`
     cursor: pointer;
   }
 
+  .sidebar-form .sample-thumbnails {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .sidebar-form .sample-thumb {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem;
+    background: #0f3460;
+    border: 2px solid #1a3a5c;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .sidebar-form .sample-thumb:hover {
+    border-color: #00d9ff;
+    background: #1a3a5c;
+  }
+
+  .sidebar-form .sample-thumb.active {
+    border-color: #00d9ff;
+    background: rgba(0, 217, 255, 0.15);
+  }
+
+  .sidebar-form .sample-thumb img {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+
+  .sidebar-form .sample-thumb span {
+    font-size: 0.65rem;
+    color: #8892b0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .sidebar-form .sample-thumb.active span {
+    color: #00d9ff;
+  }
+
   .sidebar-form .file-input-wrapper {
     position: relative;
   }

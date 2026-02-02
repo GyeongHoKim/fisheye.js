@@ -161,6 +161,7 @@ export class WebGPURenderer {
       passEncoder.draw(6, 1, 0, 0);
       passEncoder.end();
       this.device.queue.submit([commandEncoder.finish()]);
+      await this.device.queue.onSubmittedWorkDone();
     } finally {
       frame.close();
     }
