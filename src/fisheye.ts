@@ -462,6 +462,43 @@ export class Fisheye {
     );
   }
 
+  /** Resolve new camera matrix for uniforms (manual vs auto). */
+  private getNewCameraMatrixForUniform(
+    inputWidth: number,
+    inputHeight: number,
+  ): InternalCameraMatrix {
+    const { projection, size } = this.config;
+    if (isRectilinearManual(projection)) {
+      return {
+        newFx: projection.newFx * (size.width / inputWidth),
+        newFy: projection.newFy * (size.height / inputHeight),
+        newCx: projection.newCx ?? size.width / 2,
+        newCy: projection.newCy ?? size.height / 2,
+      };
+    }
+    if (
+      !this.cachedNewCameraMatrix ||
+      this.uniformInputWidth !== inputWidth ||
+      this.uniformInputHeight !== inputHeight
+    ) {
+      this.cachedNewCameraMatrix = this.computeNewCameraMatrix(inputWidth, inputHeight);
+    }
+    return this.cachedNewCameraMatrix;
+  }
+
+  /** Projection kind → shader numeric: 0=rectilinear, 1=equirectangular, 2=original, 3=cylindrical. */
+  private getProjectionNumericValue(
+    kind: "rectilinear" | "equirectangular" | "original" | "cylindrical",
+  ): number {
+    const map: Record<typeof kind, number> = {
+      rectilinear: 0,
+      equirectangular: 1,
+      original: 2,
+      cylindrical: 3,
+    };
+    return map[kind];
+  }
+
   private getUniformData(ptzOverride?: PTZOptions): d.Infer<typeof FisheyeUniforms> {
     const { K, D, size, projection, ptz } = this.config;
     const inputWidth = this.uniformInputWidth || size.width;
@@ -473,53 +510,13 @@ export class Fisheye {
     const cy = K?.cy ?? inputHeight / 2;
     const alpha = K?.alpha ?? 0;
 
-    let newCam: InternalCameraMatrix;
+    const newCam = this.getNewCameraMatrixForUniform(inputWidth, inputHeight);
+    const projectionValue = this.getProjectionNumericValue(projection.kind);
 
-    // RectilinearManual: use provided newFx/newFy/newCx/newCy
-    if (isRectilinearManual(projection)) {
-      newCam = {
-        newFx: projection.newFx * (size.width / inputWidth),
-        newFy: projection.newFy * (size.height / inputHeight),
-        newCx: projection.newCx ?? size.width / 2,
-        newCy: projection.newCy ?? size.height / 2,
-      };
-    } else {
-      // Auto: compute via estimateNewCameraMatrixForUndistortRectify
-      if (
-        !this.cachedNewCameraMatrix ||
-        this.uniformInputWidth !== inputWidth ||
-        this.uniformInputHeight !== inputHeight
-      ) {
-        this.cachedNewCameraMatrix = this.computeNewCameraMatrix(inputWidth, inputHeight);
-      }
-      newCam = this.cachedNewCameraMatrix;
-    }
-
-    // Projection kind → numeric value for shader
-    // 0 = rectilinear, 1 = equirectangular, 2 = original, 3 = cylindrical
-    let projectionValue = 0;
-    switch (projection.kind) {
-      case "rectilinear":
-        projectionValue = 0;
-        break;
-      case "equirectangular":
-        projectionValue = 1;
-        break;
-      case "original":
-        projectionValue = 2;
-        break;
-      case "cylindrical":
-        projectionValue = 3;
-        break;
-    }
-
-    // Use override if provided, otherwise use config ptz
     const activePtz = ptzOverride ?? ptz;
     const panDeg = activePtz?.pan ?? 0;
     const tiltDeg = activePtz?.tilt ?? 0;
     const zoomFactor = activePtz?.zoom ?? 1.0;
-
-    // Convert degrees to radians
     const panRad = (panDeg * Math.PI) / 180;
     const tiltRad = (tiltDeg * Math.PI) / 180;
 

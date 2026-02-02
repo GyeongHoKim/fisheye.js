@@ -306,6 +306,36 @@ export class FisheyeDemo extends LitElement {
     }
   }
 
+  private ensureFisheyeReady(options: ReturnType<FisheyeDemo["buildFisheyeOptions"]>): void {
+    if (!this.fisheye) {
+      this.fisheye = new Fisheye(options);
+    } else {
+      this.fisheye.updateConfig(options);
+    }
+  }
+
+  private async drawOrCloseResult(
+    result: VideoFrame | VideoFrame[],
+    isLatest: boolean,
+  ): Promise<void> {
+    if (!isLatest) {
+      if (Array.isArray(result)) {
+        for (const f of result) f.close();
+      } else {
+        result.close();
+      }
+      return;
+    }
+    if (this.vmsMode === "pane" && Array.isArray(result)) {
+      await this.renderPaneFrames(result);
+    } else if (result instanceof VideoFrame) {
+      if (!this.renderer) {
+        this.renderer = new WebGPURenderer(this.outputCanvas);
+      }
+      await this.renderer.draw(result);
+    }
+  }
+
   private async processImage(
     image?: ImageBitmap | null,
     sampleIdForCalibration?: string,
@@ -327,46 +357,24 @@ export class FisheyeDemo extends LitElement {
       const w = bitmap.width;
       const h = bitmap.height;
       const fisheyeOptions = this.buildFisheyeOptions(w, h, sampleIdForCalibration);
+      this.ensureFisheyeReady(fisheyeOptions);
 
-      // Initialize fisheye if needed (recreate when mode changes)
-      if (!this.fisheye) {
-        this.fisheye = new Fisheye(fisheyeOptions);
-      } else {
-        this.fisheye.updateConfig(fisheyeOptions);
+      const fisheye = this.fisheye;
+      if (!fisheye) {
+        this.isProcessing = false;
+        return;
       }
 
-      // Create VideoFrame from the image we were asked to process
-      const inputFrame = new VideoFrame(bitmap, {
-        timestamp: 0,
-      });
+      const inputFrame = new VideoFrame(bitmap, { timestamp: 0 });
       let inputClosed = false;
 
       try {
-        // Dewarp the frame
-        const result = await this.fisheye.undistort(inputFrame);
+        const result = await fisheye.undistort(inputFrame);
         inputFrame.close();
         inputClosed = true;
 
-        // Only draw to output if this run is still the latest load (avoids one-frame lag)
-        if (requestId === undefined || requestId === this.loadRequestId) {
-          if (this.vmsMode === "pane" && Array.isArray(result)) {
-            // Pane mode: render multiple frames to pane canvases
-            await this.renderPaneFrames(result);
-          } else if (result instanceof VideoFrame) {
-            // Default or PTZ mode: single frame
-            if (!this.renderer) {
-              this.renderer = new WebGPURenderer(this.outputCanvas);
-            }
-            await this.renderer.draw(result);
-          }
-        } else {
-          // Close frames if not rendering
-          if (Array.isArray(result)) {
-            for (const f of result) f.close();
-          } else {
-            result.close();
-          }
-        }
+        const isLatest = requestId === undefined || requestId === this.loadRequestId;
+        await this.drawOrCloseResult(result, isLatest);
       } finally {
         if (!inputClosed) inputFrame.close();
         this.isProcessing = false;
@@ -494,6 +502,144 @@ export class FisheyeDemo extends LitElement {
     this.loadDefaultImage();
   }
 
+  private renderSidebarFormContent() {
+    if (this.errorMessage && !this.hasWebGPU) {
+      return html`<div class="error">${this.errorMessage}</div>`;
+    }
+    return html`
+      <div class="control-group">
+        <h3>Image</h3>
+        <p class="control-hint">Pick a sample or upload your own file.</p>
+        <div class="sample-thumbnails">
+          ${SAMPLE_IMAGES.map(
+            (s) => html`
+              <button
+                type="button"
+                class="sample-thumb ${this.selectedSampleId === s.id ? "active" : ""}"
+                title=${s.label}
+                @click=${() => this.handleSampleSelect(s)}
+              >
+                <img src="${import.meta.env.BASE_URL}${s.src}" alt=${s.label} loading="lazy" />
+                <span>${s.label}</span>
+              </button>
+            `,
+          )}
+        </div>
+        <div class="file-input-wrapper">
+          <input type="file" accept="image/*" @change=${this.handleFileUpload} />
+          <div class="file-input-label">
+            <span>📁</span>
+            Upload Image
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>VMS Mode</h3>
+        <p class="control-hint">Select viewing mode: Default, PTZ (e-PTZ), or Pane (multi-view).</p>
+        <div class="preset-buttons">
+          <button
+            class="preset-btn ${this.vmsMode === "default" ? "active" : ""}"
+            @click=${() => this.handleVmsModeChange("default")}
+          >
+            Default
+          </button>
+          <button
+            class="preset-btn ${this.vmsMode === "ptz" ? "active" : ""}"
+            @click=${() => this.handleVmsModeChange("ptz")}
+          >
+            PTZ
+          </button>
+          <button
+            class="preset-btn ${this.vmsMode === "pane" ? "active" : ""}"
+            @click=${() => this.handleVmsModeChange("pane")}
+          >
+            Pane
+          </button>
+        </div>
+      </div>
+
+      ${this.vmsMode === "ptz" ? this.renderPtzControls() : ""}
+      ${this.vmsMode === "pane" ? this.renderPaneControls() : ""}
+
+      <div class="control-group">
+        <h3>View preset</h3>
+        <p class="control-hint">Projection mode (rectilinear, equirectangular, etc.)</p>
+        <div class="preset-buttons">
+          ${VIEW_PRESETS.map(
+            (p) => html`
+              <button
+                class="preset-btn ${this.presetId !== null && this.presetId === p.id ? "active" : ""}"
+                @click=${() => this.handlePresetChange(p.id)}
+              >
+                ${p.label}
+              </button>
+            `,
+          )}
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Distortion Coefficients</h3>
+        <p class="control-hint">OpenCV fisheye: θ_d = θ(1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸). Typical |k| &lt; 0.1.</p>
+        ${this.renderSlider("k1", this.k1, -0.1, 0.1, 0.0001)}
+        ${this.renderSlider("k2", this.k2, -0.1, 0.1, 0.0001)}
+        ${this.renderSlider("k3", this.k3, -0.1, 0.1, 0.0001)}
+        ${this.renderSlider("k4", this.k4, -0.1, 0.1, 0.0001)}
+      </div>
+
+      <div class="control-group">
+        <h3>Camera Parameters</h3>
+        <p class="control-hint">balance: 0 = no black edges, 1 = keep original FOV. fovScale: &gt;1 = widen FOV, &lt;1 = narrow FOV.</p>
+        ${this.renderSlider("balance", this.balance, 0, 1, 0.01)}
+        ${this.renderSlider("fovScale", this.fovScale, 0.1, 3, 0.01)}
+      </div>
+
+      <div class="control-group">
+        <button class="btn btn-secondary" @click=${this.resetToDefaults}>
+          Reset to Defaults
+        </button>
+      </div>
+    `;
+  }
+
+  private renderCanvasArea() {
+    const showError = this.errorMessage && this.hasWebGPU;
+    const showProcessing = this.isProcessing;
+    return html`
+      <div class="canvas-area">
+        ${showError ? html`<div class="error">${this.errorMessage}</div>` : ""}
+        ${
+          showProcessing
+            ? html`
+              <div class="processing">
+                <div class="spinner"></div>
+                Processing...
+              </div>
+            `
+            : ""
+        }
+
+        <div class="canvas-container">
+          <div class="canvas-wrapper">
+            <h4>Input (Fisheye)</h4>
+            <canvas id="input-canvas" width="640" height="480"></canvas>
+          </div>
+          ${
+            this.vmsMode === "pane"
+              ? this.renderPaneCanvases()
+              : html`
+                <div class="canvas-wrapper">
+                  <h4>Output (Dewarped)</h4>
+                  <canvas id="output-canvas" width="640" height="480"></canvas>
+                </div>
+              `
+          }
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     return html`
       <div class="container">
@@ -506,146 +652,11 @@ export class FisheyeDemo extends LitElement {
               @toggle=${this.handleSidebarToggle}
             ></demo-sidebar>
             <div class="sidebar-form ${this.sidebarOpen ? "open" : "closed"}">
-              ${
-                this.errorMessage && !this.hasWebGPU
-                  ? html`<div class="error">${this.errorMessage}</div>`
-                  : html`
-                    <div class="control-group">
-                      <h3>Image</h3>
-                      <p class="control-hint">Pick a sample or upload your own file.</p>
-                      <div class="sample-thumbnails">
-                        ${SAMPLE_IMAGES.map(
-                          (s) => html`
-                            <button
-                              type="button"
-                              class="sample-thumb ${this.selectedSampleId === s.id ? "active" : ""}"
-                              title=${s.label}
-                              @click=${() => this.handleSampleSelect(s)}
-                            >
-                              <img src="${import.meta.env.BASE_URL}${s.src}" alt=${s.label} loading="lazy" />
-                              <span>${s.label}</span>
-                            </button>
-                          `,
-                        )}
-                      </div>
-                      <div class="file-input-wrapper">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          @change=${this.handleFileUpload}
-                        />
-                        <div class="file-input-label">
-                          <span>📁</span>
-                          Upload Image
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="control-group">
-                      <h3>VMS Mode</h3>
-                      <p class="control-hint">Select viewing mode: Default, PTZ (e-PTZ), or Pane (multi-view).</p>
-                      <div class="preset-buttons">
-                        <button
-                          class="preset-btn ${this.vmsMode === "default" ? "active" : ""}"
-                          @click=${() => this.handleVmsModeChange("default")}
-                        >
-                          Default
-                        </button>
-                        <button
-                          class="preset-btn ${this.vmsMode === "ptz" ? "active" : ""}"
-                          @click=${() => this.handleVmsModeChange("ptz")}
-                        >
-                          PTZ
-                        </button>
-                        <button
-                          class="preset-btn ${this.vmsMode === "pane" ? "active" : ""}"
-                          @click=${() => this.handleVmsModeChange("pane")}
-                        >
-                          Pane
-                        </button>
-                      </div>
-                    </div>
-
-                    ${this.vmsMode === "ptz" ? this.renderPtzControls() : ""}
-                    ${this.vmsMode === "pane" ? this.renderPaneControls() : ""}
-
-                    <div class="control-group">
-                      <h3>View preset</h3>
-                      <p class="control-hint">Projection mode (rectilinear, equirectangular, etc.)</p>
-                      <div class="preset-buttons">
-                        ${VIEW_PRESETS.map(
-                          (p) => html`
-                            <button
-                              class="preset-btn ${this.presetId !== null && this.presetId === p.id ? "active" : ""}"
-                              @click=${() => this.handlePresetChange(p.id)}
-                            >
-                              ${p.label}
-                            </button>
-                          `,
-                        )}
-                      </div>
-                    </div>
-
-                    <div class="control-group">
-                      <h3>Distortion Coefficients</h3>
-                      <p class="control-hint">OpenCV fisheye: θ_d = θ(1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸). Typical |k| &lt; 0.1.</p>
-                      ${this.renderSlider("k1", this.k1, -0.1, 0.1, 0.0001)}
-                      ${this.renderSlider("k2", this.k2, -0.1, 0.1, 0.0001)}
-                      ${this.renderSlider("k3", this.k3, -0.1, 0.1, 0.0001)}
-                      ${this.renderSlider("k4", this.k4, -0.1, 0.1, 0.0001)}
-                    </div>
-
-                    <div class="control-group">
-                      <h3>Camera Parameters</h3>
-                      <p class="control-hint">balance: 0 = no black edges, 1 = keep original FOV. fovScale: &gt;1 = widen FOV, &lt;1 = narrow FOV.</p>
-                      ${this.renderSlider("balance", this.balance, 0, 1, 0.01)}
-                      ${this.renderSlider("fovScale", this.fovScale, 0.1, 3, 0.01)}
-                    </div>
-
-                    <div class="control-group">
-                      <button class="btn btn-secondary" @click=${this.resetToDefaults}>
-                        Reset to Defaults
-                      </button>
-                    </div>
-                  `
-              }
+              ${this.renderSidebarFormContent()}
             </div>
           </div>
 
-          <div class="canvas-area">
-            ${
-              this.errorMessage && this.hasWebGPU
-                ? html`<div class="error">${this.errorMessage}</div>`
-                : ""
-            }
-            ${
-              this.isProcessing
-                ? html`
-                  <div class="processing">
-                    <div class="spinner"></div>
-                    Processing...
-                  </div>
-                `
-                : ""
-            }
-
-            <div class="canvas-container">
-              <div class="canvas-wrapper">
-                <h4>Input (Fisheye)</h4>
-                <canvas id="input-canvas" width="640" height="480"></canvas>
-              </div>
-              ${
-                this.vmsMode === "pane"
-                  ? this.renderPaneCanvases()
-                  : html`
-                <div class="canvas-wrapper">
-                  <h4>Output (Dewarped)</h4>
-                  <canvas id="output-canvas" width="640" height="480"></canvas>
-                </div>
-              `
-              }
-            </div>
-          </div>
+          ${this.renderCanvasArea()}
         </div>
       </div>
     `;
