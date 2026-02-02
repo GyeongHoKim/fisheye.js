@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/GyeongHoKim/fisheye.js/compare/v2.0.0...v2.1.0) (2026-02-02)
+
+
+### Features
+
+* add e-PTZ and multi-pane mode with docs and E2E tests ([101e552](https://github.com/GyeongHoKim/fisheye.js/commit/101e5520ecf9e6cfbbedcdaec2453371d6b08215))
+
 # [2.0.0](https://github.com/GyeongHoKim/fisheye.js/compare/v1.1.1...v2.0.0) (2026-02-02)
 
 
