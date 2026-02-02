@@ -500,7 +500,7 @@ export class Fisheye {
     this.readbackHasData[writeIndex] = true;
     this.readbackIndex = readIndex;
 
-    const bufferToRead = this.readbackHasData[readIndex] ? readBuffer : writeBuffer;
+    const bufferToRead = writeBuffer;
 
     await bufferToRead.mapAsync(GPUMapMode.READ);
     const mappedData = bufferToRead.getMappedRange();
