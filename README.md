@@ -69,6 +69,10 @@ const fisheye = new Fisheye({
 
   // Optional: Projection mode
   projection: { kind: "rectilinear" }, // or "equirectangular", "cylindrical", "original"
+
+  // Optional: e-PTZ (pan/tilt/zoom) or multi-pane layout (use only one)
+  // ptz: { pan: 0, tilt: 0, zoom: 1 },
+  // pane: { kind: "2pane", orientation: "horizontal" }, // or { kind: "4pane" }
 });
 
 // Option 2: Grouped style (OpenCV-like)
@@ -79,6 +83,7 @@ const fisheyeGrouped = new Fisheye({
   balance: 0.0,
   fovScale: 1.0,
   projection: { kind: "rectilinear" },
+  // ptz: { pan: 0, tilt: 0, zoom: 1 } or pane: { kind: "4pane" } (mutually exclusive)
 });
 
 // Option 3: Manual rectilinear with explicit P matrix
@@ -170,6 +175,18 @@ Creates a new Fisheye undistortion instance.
 | `fovScale` | `number?` | `1.0`      | FOV scale (>1.0 = widen FOV, <1.0 = narrow FOV)          |
 
 **Note:** These parameters exactly match [OpenCV fisheye API](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html). Use values from `cv2.fisheye.calibrate()` or `cv2.fisheye.estimateNewCameraMatrixForUndistortRectify()`.
+
+#### Mode options (e-PTZ vs multi-pane)
+
+You can optionally use **e-PTZ** (electronic pan/tilt/zoom) for a single view, or **multi-pane** for split views. Use **only one** of `ptz` or `pane`; they are mutually exclusive.
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `ptz` | `PTZOptions?` | e-PTZ: `pan` (degrees, -180–180), `tilt` (-90–90), `zoom` (1.0 = no zoom, >1 = zoom in). |
+| `pane` | `PaneLayout?` | Multi-view: `{ kind: "2pane", orientation?: "horizontal" \| "vertical" }` or `{ kind: "4pane" }`. |
+
+- **PTZOptions**: `{ pan?: number; tilt?: number; zoom?: number }`
+- **PaneLayout**: `TwoPaneLayout` (2-pane split, optional `orientation`) or `FourPaneLayout` (`{ kind: "4pane" }`)
 
 #### Projection Options
 

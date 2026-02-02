@@ -1,11 +1,17 @@
-import type { FisheyeProjection } from "@gyeonghokim/fisheye.js";
+import type { FisheyeProjection, PaneLayout, PTZOptions } from "@gyeonghokim/fisheye.js";
 import { Fisheye } from "@gyeonghokim/fisheye.js";
 import { html, LitElement } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
-import { fisheyeDemoStyles } from "./fisheye-demo.styles";
+import { fisheyeDemoStyles, ptzPaneModeStyles } from "./fisheye-demo.styles";
 import { WebGPURenderer } from "./renderer";
 import "./demo-sidebar";
 import "./page-header";
+
+/** VMS mode: default (no PTZ/Pane), ptz (e-PTZ), or pane (multi-view) */
+type VMSMode = "default" | "ptz" | "pane";
+
+/** Pane layout kind options */
+type PaneKind = "2pane-horizontal" | "2pane-vertical" | "4pane";
 
 /** Reference size for calibration (test/fixture images are 3264×3264). */
 const CALIBRATION_REF_SIZE = 3264;
@@ -108,11 +114,23 @@ export class FisheyeDemo extends LitElement {
   @state() private sidebarOpen = true;
   @state() private selectedSampleId: string | null = "cam1_01";
 
+  // VMS mode state
+  @state() private vmsMode: VMSMode = "default";
+  @state() private ptzPan = 0;
+  @state() private ptzTilt = 0;
+  @state() private ptzZoom = 1.0;
+  @state() private paneKind: PaneKind = "4pane";
+
   @query("#output-canvas") private outputCanvas!: HTMLCanvasElement;
   @query("#input-canvas") private inputCanvas!: HTMLCanvasElement;
+  @query("#pane-canvas-0") private paneCanvas0!: HTMLCanvasElement;
+  @query("#pane-canvas-1") private paneCanvas1!: HTMLCanvasElement;
+  @query("#pane-canvas-2") private paneCanvas2!: HTMLCanvasElement;
+  @query("#pane-canvas-3") private paneCanvas3!: HTMLCanvasElement;
 
   private fisheye: Fisheye | null = null;
   private renderer: WebGPURenderer | null = null;
+  private paneRenderers: WebGPURenderer[] = [];
   private currentImageBitmap: ImageBitmap | null = null;
 
   private processImagePromise: Promise<void> = Promise.resolve();
@@ -122,7 +140,7 @@ export class FisheyeDemo extends LitElement {
 
   private static readonly PROCESS_IMAGE_DEBOUNCE_MS = 200;
 
-  static styles = fisheyeDemoStyles;
+  static styles = [fisheyeDemoStyles, ptzPaneModeStyles];
 
   connectedCallback() {
     super.connectedCallback();
@@ -138,6 +156,8 @@ export class FisheyeDemo extends LitElement {
     }
     this.fisheye?.destroy();
     this.renderer?.destroy();
+    for (const r of this.paneRenderers) r.destroy();
+    this.paneRenderers = [];
     this.currentImageBitmap?.close();
   }
 
@@ -227,6 +247,23 @@ export class FisheyeDemo extends LitElement {
             newCy: h / 2,
           }
         : this.projection;
+
+    // Build PTZ or Pane options based on VMS mode
+    let ptz: PTZOptions | undefined;
+    let pane: PaneLayout | undefined;
+
+    if (this.vmsMode === "ptz") {
+      ptz = { pan: this.ptzPan, tilt: this.ptzTilt, zoom: this.ptzZoom };
+    } else if (this.vmsMode === "pane") {
+      if (this.paneKind === "4pane") {
+        pane = { kind: "4pane" };
+      } else if (this.paneKind === "2pane-horizontal") {
+        pane = { kind: "2pane", orientation: "horizontal" };
+      } else {
+        pane = { kind: "2pane", orientation: "vertical" };
+      }
+    }
+
     return {
       fx: cal.fx * scaleX,
       fy: cal.fy * scaleY,
@@ -241,6 +278,8 @@ export class FisheyeDemo extends LitElement {
       balance: this.balance,
       fovScale: this.fovScale,
       projection,
+      ptz,
+      pane,
     };
   }
 
@@ -289,44 +328,72 @@ export class FisheyeDemo extends LitElement {
       const h = bitmap.height;
       const fisheyeOptions = this.buildFisheyeOptions(w, h, sampleIdForCalibration);
 
-      // Initialize fisheye if needed
+      // Initialize fisheye if needed (recreate when mode changes)
       if (!this.fisheye) {
         this.fisheye = new Fisheye(fisheyeOptions);
       } else {
         this.fisheye.updateConfig(fisheyeOptions);
       }
 
-      // Initialize renderer if needed
-      if (!this.renderer) {
-        this.renderer = new WebGPURenderer(this.outputCanvas);
-      }
-
       // Create VideoFrame from the image we were asked to process
       const inputFrame = new VideoFrame(bitmap, {
         timestamp: 0,
       });
-      let outputFrame: VideoFrame | null = null;
       let inputClosed = false;
 
       try {
         // Dewarp the frame
-        outputFrame = await this.fisheye.undistort(inputFrame);
+        const result = await this.fisheye.undistort(inputFrame);
         inputFrame.close();
         inputClosed = true;
 
         // Only draw to output if this run is still the latest load (avoids one-frame lag)
         if (requestId === undefined || requestId === this.loadRequestId) {
-          await this.renderer.draw(outputFrame);
-          outputFrame = null;
+          if (this.vmsMode === "pane" && Array.isArray(result)) {
+            // Pane mode: render multiple frames to pane canvases
+            await this.renderPaneFrames(result);
+          } else if (result instanceof VideoFrame) {
+            // Default or PTZ mode: single frame
+            if (!this.renderer) {
+              this.renderer = new WebGPURenderer(this.outputCanvas);
+            }
+            await this.renderer.draw(result);
+          }
+        } else {
+          // Close frames if not rendering
+          if (Array.isArray(result)) {
+            for (const f of result) f.close();
+          } else {
+            result.close();
+          }
         }
       } finally {
         if (!inputClosed) inputFrame.close();
-        outputFrame?.close();
         this.isProcessing = false;
       }
     } catch (e) {
       this.errorMessage = `Processing error: ${e}`;
       console.error(e);
+    }
+  }
+
+  private async renderPaneFrames(frames: VideoFrame[]) {
+    const paneCanvases = [this.paneCanvas0, this.paneCanvas1, this.paneCanvas2, this.paneCanvas3];
+    const numPanes = frames.length;
+
+    // Initialize pane renderers if needed
+    while (this.paneRenderers.length < numPanes) {
+      const idx = this.paneRenderers.length;
+      if (paneCanvases[idx]) {
+        this.paneRenderers.push(new WebGPURenderer(paneCanvases[idx]));
+      }
+    }
+
+    // Render each frame to its canvas
+    for (let i = 0; i < numPanes && i < paneCanvases.length; i++) {
+      if (this.paneRenderers[i] && frames[i]) {
+        await this.paneRenderers[i].draw(frames[i]);
+      }
     }
   }
 
@@ -369,6 +436,37 @@ export class FisheyeDemo extends LitElement {
     await this.enqueueProcessImage();
   }
 
+  private async handleVmsModeChange(mode: VMSMode) {
+    this.cancelProcessImageDebounce();
+    this.vmsMode = mode;
+    // Destroy and recreate fisheye when mode changes
+    this.fisheye?.destroy();
+    this.fisheye = null;
+    // Clean up pane renderers when switching away from pane mode
+    if (mode !== "pane") {
+      for (const r of this.paneRenderers) r.destroy();
+      this.paneRenderers = [];
+    }
+    await this.enqueueProcessImage();
+  }
+
+  private handlePtzChange(param: "ptzPan" | "ptzTilt" | "ptzZoom", value: number) {
+    (this as unknown as Record<string, number>)[param] = value;
+    this.scheduleProcessImageDebounced();
+  }
+
+  private async handlePaneKindChange(kind: PaneKind) {
+    this.cancelProcessImageDebounce();
+    this.paneKind = kind;
+    // Destroy and recreate fisheye when pane kind changes
+    this.fisheye?.destroy();
+    this.fisheye = null;
+    // Clean up and recreate pane renderers
+    for (const r of this.paneRenderers) r.destroy();
+    this.paneRenderers = [];
+    await this.enqueueProcessImage();
+  }
+
   private handleSidebarToggle() {
     this.sidebarOpen = !this.sidebarOpen;
   }
@@ -382,7 +480,17 @@ export class FisheyeDemo extends LitElement {
     this.k2 = FISHEYE_DEFAULTS.k2;
     this.k3 = FISHEYE_DEFAULTS.k3;
     this.k4 = FISHEYE_DEFAULTS.k4;
+    // Reset VMS mode
+    this.vmsMode = "default";
+    this.ptzPan = 0;
+    this.ptzTilt = 0;
+    this.ptzZoom = 1.0;
+    this.paneKind = "4pane";
+    // Clean up
+    this.fisheye?.destroy();
     this.fisheye = null;
+    for (const r of this.paneRenderers) r.destroy();
+    this.paneRenderers = [];
     this.loadDefaultImage();
   }
 
@@ -432,6 +540,34 @@ export class FisheyeDemo extends LitElement {
                         </div>
                       </div>
                     </div>
+
+                    <div class="control-group">
+                      <h3>VMS Mode</h3>
+                      <p class="control-hint">Select viewing mode: Default, PTZ (e-PTZ), or Pane (multi-view).</p>
+                      <div class="preset-buttons">
+                        <button
+                          class="preset-btn ${this.vmsMode === "default" ? "active" : ""}"
+                          @click=${() => this.handleVmsModeChange("default")}
+                        >
+                          Default
+                        </button>
+                        <button
+                          class="preset-btn ${this.vmsMode === "ptz" ? "active" : ""}"
+                          @click=${() => this.handleVmsModeChange("ptz")}
+                        >
+                          PTZ
+                        </button>
+                        <button
+                          class="preset-btn ${this.vmsMode === "pane" ? "active" : ""}"
+                          @click=${() => this.handleVmsModeChange("pane")}
+                        >
+                          Pane
+                        </button>
+                      </div>
+                    </div>
+
+                    ${this.vmsMode === "ptz" ? this.renderPtzControls() : ""}
+                    ${this.vmsMode === "pane" ? this.renderPaneControls() : ""}
 
                     <div class="control-group">
                       <h3>View preset</h3>
@@ -498,10 +634,16 @@ export class FisheyeDemo extends LitElement {
                 <h4>Input (Fisheye)</h4>
                 <canvas id="input-canvas" width="640" height="480"></canvas>
               </div>
-              <div class="canvas-wrapper">
-                <h4>Output (Dewarped)</h4>
-                <canvas id="output-canvas" width="640" height="480"></canvas>
-              </div>
+              ${
+                this.vmsMode === "pane"
+                  ? this.renderPaneCanvases()
+                  : html`
+                <div class="canvas-wrapper">
+                  <h4>Output (Dewarped)</h4>
+                  <canvas id="output-canvas" width="640" height="480"></canvas>
+                </div>
+              `
+              }
             </div>
           </div>
         </div>
@@ -525,6 +667,113 @@ export class FisheyeDemo extends LitElement {
           @input=${(e: Event) =>
             this.handleParamChange(name, Number((e.target as HTMLInputElement).value))}
         />
+      </div>
+    `;
+  }
+
+  private renderPtzControls() {
+    return html`
+      <div class="control-group ptz-controls">
+        <h3>PTZ Controls</h3>
+        <p class="control-hint">Pan (-180° to 180°), Tilt (-90° to 90°), Zoom (0.5x to 4x).</p>
+        <div class="control-item">
+          <label>
+            Pan
+            <span>${this.ptzPan.toFixed(0)}°</span>
+          </label>
+          <input
+            type="range"
+            min="-180"
+            max="180"
+            step="1"
+            .value=${String(this.ptzPan)}
+            @input=${(e: Event) =>
+              this.handlePtzChange("ptzPan", Number((e.target as HTMLInputElement).value))}
+          />
+        </div>
+        <div class="control-item">
+          <label>
+            Tilt
+            <span>${this.ptzTilt.toFixed(0)}°</span>
+          </label>
+          <input
+            type="range"
+            min="-90"
+            max="90"
+            step="1"
+            .value=${String(this.ptzTilt)}
+            @input=${(e: Event) =>
+              this.handlePtzChange("ptzTilt", Number((e.target as HTMLInputElement).value))}
+          />
+        </div>
+        <div class="control-item">
+          <label>
+            Zoom
+            <span>${this.ptzZoom.toFixed(1)}x</span>
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="4"
+            step="0.1"
+            .value=${String(this.ptzZoom)}
+            @input=${(e: Event) =>
+              this.handlePtzChange("ptzZoom", Number((e.target as HTMLInputElement).value))}
+          />
+        </div>
+      </div>
+    `;
+  }
+
+  private renderPaneControls() {
+    return html`
+      <div class="control-group pane-controls">
+        <h3>Pane Layout</h3>
+        <p class="control-hint">Select multi-view layout for VMS display.</p>
+        <div class="preset-buttons">
+          <button
+            class="preset-btn ${this.paneKind === "2pane-horizontal" ? "active" : ""}"
+            @click=${() => this.handlePaneKindChange("2pane-horizontal")}
+          >
+            2-Pane (H)
+          </button>
+          <button
+            class="preset-btn ${this.paneKind === "2pane-vertical" ? "active" : ""}"
+            @click=${() => this.handlePaneKindChange("2pane-vertical")}
+          >
+            2-Pane (V)
+          </button>
+          <button
+            class="preset-btn ${this.paneKind === "4pane" ? "active" : ""}"
+            @click=${() => this.handlePaneKindChange("4pane")}
+          >
+            4-Pane
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderPaneCanvases() {
+    const numPanes = this.paneKind === "4pane" ? 4 : 2;
+    const paneLabels =
+      this.paneKind === "4pane"
+        ? ["Front (0°)", "Right (90°)", "Back (180°)", "Left (-90°)"]
+        : this.paneKind === "2pane-horizontal"
+          ? ["Left (-45°)", "Right (45°)"]
+          : ["Top (tilt +30°)", "Bottom (tilt -30°)"];
+
+    return html`
+      <div class="pane-output ${this.paneKind}">
+        ${Array.from(
+          { length: numPanes },
+          (_, i) => html`
+          <div class="canvas-wrapper pane-wrapper">
+            <h4>${paneLabels[i]}</h4>
+            <canvas id="pane-canvas-${i}" width="400" height="300"></canvas>
+          </div>
+        `,
+        )}
       </div>
     `;
   }
