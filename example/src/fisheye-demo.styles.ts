@@ -1,5 +1,70 @@
 import { css } from "lit";
 
+export const ptzPaneModeStyles = css`
+  .ptz-controls,
+  .pane-controls {
+    background: rgba(0, 217, 255, 0.05);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .ptz-controls h3,
+  .pane-controls h3 {
+    color: #00d9ff;
+  }
+
+  .pane-output {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .pane-output.4pane {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+  }
+
+  .pane-output.2pane-horizontal {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pane-output.2pane-vertical {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, 1fr);
+  }
+
+  .pane-wrapper {
+    background: #0a0a14;
+    border-radius: 8px;
+    padding: 0.5rem;
+  }
+
+  .pane-wrapper canvas {
+    width: 100%;
+    height: auto;
+    max-width: 400px;
+  }
+
+  .pane-wrapper h4 {
+    font-size: 0.65rem;
+    color: #8892b0;
+    margin: 0 0 0.5rem 0;
+    text-align: center;
+  }
+
+  @media (max-width: 900px) {
+    .pane-output.4pane {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(4, auto);
+    }
+
+    .pane-output.2pane-horizontal {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
+
 export const fisheyeDemoStyles = css`
   :host {
     display: block;

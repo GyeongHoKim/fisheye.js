@@ -7,11 +7,16 @@ export type {
   FisheyeOptions,
   FisheyeOptionsStrict,
   FisheyeProjection,
+  FourPaneLayout,
   ImageSize,
   KMatrix,
   NewCameraMatrix,
   OutputSize,
+  PaneLayout,
+  PTZOptions,
+  TwoPaneLayout,
 } from "./types";
+export { PANE_PRESETS } from "./types";
 export type { CreateVideoFrameOptions, YUVFormat } from "./utils";
 export {
   calculateYUVDataSize,

@@ -1,8 +1,14 @@
 import tgpu, { type TgpuBuffer, type TgpuTexture } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
-import type { FisheyeConfig, FisheyeOptions, FisheyeOptionsStrict } from "./types";
-import { DEFAULT_PROJECTION, isRectilinearManual } from "./types";
+import type { FisheyeConfig, FisheyeOptions, FisheyeOptionsStrict, PTZOptions } from "./types";
+import {
+  DEFAULT_PROJECTION,
+  getPanePresetKey,
+  isRectilinearManual,
+  PANE_PRESETS,
+  validateModeExclusivity,
+} from "./types";
 
 const FisheyeUniforms = d.struct({
   fx: d.f32,
@@ -23,8 +29,11 @@ const FisheyeUniforms = d.struct({
   inputWidth: d.f32,
   inputHeight: d.f32,
   projection: d.f32,
-  _pad1: d.f32,
-  _pad2: d.f32,
+  // PTZ parameters
+  panRad: d.f32, // Pan rotation in radians
+  tiltRad: d.f32, // Tilt rotation in radians
+  zoomFactor: d.f32, // Zoom factor (1.0 = no zoom)
+  _pad1: d.f32, // Padding for 16-byte alignment
 });
 
 type TgpuRootType = Awaited<ReturnType<typeof tgpu.init>>;
@@ -100,6 +109,7 @@ export class Fisheye {
 
     if (isGrouped) {
       const grouped = options as FisheyeConfig;
+      validateModeExclusivity(grouped.ptz, grouped.pane);
       return {
         K: grouped.K,
         D: grouped.D,
@@ -107,13 +117,33 @@ export class Fisheye {
         balance: Math.max(0, Math.min(1, grouped.balance)),
         fovScale: grouped.fovScale,
         projection: grouped.projection,
+        ptz: grouped.ptz,
+        pane: grouped.pane,
       };
     }
 
     // Flat options → grouped config
     const flat = options as FisheyeOptionsStrict;
-    const { fx, fy, cx, cy, alpha, k1, k2, k3, k4, width, height, balance, fovScale, projection } =
-      flat;
+    const {
+      fx,
+      fy,
+      cx,
+      cy,
+      alpha,
+      k1,
+      k2,
+      k3,
+      k4,
+      width,
+      height,
+      balance,
+      fovScale,
+      projection,
+      ptz,
+      pane,
+    } = flat;
+
+    validateModeExclusivity(ptz, pane);
 
     return {
       K: fx !== undefined && fy !== undefined ? { fx, fy, cx, cy, alpha } : undefined,
@@ -122,6 +152,8 @@ export class Fisheye {
       balance: Math.max(0, Math.min(1, balance ?? 0.0)),
       fovScale: fovScale ?? 1.0,
       projection: projection ?? DEFAULT_PROJECTION,
+      ptz,
+      pane,
     };
   }
 
@@ -297,8 +329,12 @@ export class Fisheye {
           v = (coordYf / outputH) * inputH;
           inBounds = true;
         } else {
-          let normX = (coordXf - p.newCx) / p.newFx;
-          let normY = (coordYf - p.newCy) / p.newFy;
+          // Apply zoom to effective focal length
+          const zoomedNewFx = p.newFx * p.zoomFactor;
+          const zoomedNewFy = p.newFy * p.zoomFactor;
+
+          let normX = (coordXf - p.newCx) / zoomedNewFx;
+          let normY = (coordYf - p.newCy) / zoomedNewFy;
           let validProjection = true;
 
           const isEquirect = p.projection > 0.5 && p.projection < 1.5;
@@ -339,6 +375,46 @@ export class Fisheye {
               normX = 0.0;
               normY = 0.0;
             }
+          }
+
+          // Apply PTZ rotation (pan/tilt) to normalized coordinates
+          // Convert 2D normalized to 3D direction vector
+          let dirX = normX;
+          let dirY = normY;
+          let dirZ = d.f32(1.0);
+
+          // Normalize the direction vector
+          const dirLen = std.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+          dirX = dirX / dirLen;
+          dirY = dirY / dirLen;
+          dirZ = dirZ / dirLen;
+
+          // Apply tilt (rotation around X-axis)
+          const cosTilt = std.cos(p.tiltRad);
+          const sinTilt = std.sin(p.tiltRad);
+          const tiltedY = dirY * cosTilt - dirZ * sinTilt;
+          const tiltedZ = dirY * sinTilt + dirZ * cosTilt;
+          dirY = tiltedY;
+          dirZ = tiltedZ;
+
+          // Apply pan (rotation around Y-axis)
+          const cosPan = std.cos(p.panRad);
+          const sinPan = std.sin(p.panRad);
+          const pannedX = dirX * cosPan + dirZ * sinPan;
+          const pannedZ = -dirX * sinPan + dirZ * cosPan;
+          dirX = pannedX;
+          dirZ = pannedZ;
+
+          // Check if point is behind the camera
+          validProjection = validProjection && dirZ > 0.001;
+
+          // Project back to 2D (only if valid)
+          if (validProjection) {
+            normX = dirX / dirZ;
+            normY = dirY / dirZ;
+          } else {
+            normX = 0.0;
+            normY = 0.0;
           }
 
           const r = std.sqrt(normX * normX + normY * normY);
@@ -386,8 +462,8 @@ export class Fisheye {
     );
   }
 
-  private getUniformData(): d.Infer<typeof FisheyeUniforms> {
-    const { K, D, size, projection } = this.config;
+  private getUniformData(ptzOverride?: PTZOptions): d.Infer<typeof FisheyeUniforms> {
+    const { K, D, size, projection, ptz } = this.config;
     const inputWidth = this.uniformInputWidth || size.width;
     const inputHeight = this.uniformInputHeight || size.height;
 
@@ -437,6 +513,16 @@ export class Fisheye {
         break;
     }
 
+    // Use override if provided, otherwise use config ptz
+    const activePtz = ptzOverride ?? ptz;
+    const panDeg = activePtz?.pan ?? 0;
+    const tiltDeg = activePtz?.tilt ?? 0;
+    const zoomFactor = activePtz?.zoom ?? 1.0;
+
+    // Convert degrees to radians
+    const panRad = (panDeg * Math.PI) / 180;
+    const tiltRad = (tiltDeg * Math.PI) / 180;
+
     return {
       fx,
       fy,
@@ -456,8 +542,10 @@ export class Fisheye {
       inputWidth,
       inputHeight,
       projection: projectionValue,
+      panRad,
+      tiltRad,
+      zoomFactor,
       _pad1: 0,
-      _pad2: 0,
     };
   }
 
@@ -560,10 +648,14 @@ export class Fisheye {
     });
   }
 
-  /** Undistort a VideoFrame. */
-  async undistort(frame: VideoFrame): Promise<VideoFrame> {
-    await this.initialize();
-
+  /**
+   * Internal single-pass undistort with optional PTZ override.
+   * Used by both PTZ mode and Pane mode (for each pane).
+   */
+  private async undistortSinglePass(
+    frame: VideoFrame,
+    ptzOverride?: PTZOptions,
+  ): Promise<VideoFrame> {
     if (!this.root || !this.uniformBuffer) {
       throw new Error("GPU resources not initialized");
     }
@@ -624,7 +716,9 @@ export class Fisheye {
       this.uniformInputHeight = frame.displayHeight;
       this.cachedNewCameraMatrix = null;
     }
-    this.updateUniforms();
+
+    // Update uniforms with optional PTZ override
+    this.uniformBuffer.write(this.getUniformData(ptzOverride));
 
     if (!this.bindGroup) {
       this.bindGroup = root.createBindGroup(fisheyeLayout, {
@@ -643,6 +737,33 @@ export class Fisheye {
 
     const outputGpuTexture = root.unwrap(outputTexture);
     return this.readbackToVideoFrame(device, outputGpuTexture, frame.timestamp);
+  }
+
+  /**
+   * Undistort a VideoFrame.
+   *
+   * @returns In PTZ mode or default: single VideoFrame.
+   *          In Pane mode: array of VideoFrames (one per pane).
+   */
+  async undistort(frame: VideoFrame): Promise<VideoFrame | VideoFrame[]> {
+    await this.initialize();
+
+    // Pane mode: run multiple passes with preset PTZ values
+    if (this.config.pane) {
+      const presetKey = getPanePresetKey(this.config.pane);
+      const presets = PANE_PRESETS[presetKey];
+      const frames: VideoFrame[] = [];
+
+      for (const preset of presets) {
+        const paneFrame = await this.undistortSinglePass(frame, preset);
+        frames.push(paneFrame);
+      }
+
+      return frames;
+    }
+
+    // PTZ mode or default: single pass
+    return this.undistortSinglePass(frame);
   }
 
   /** Update configuration. */
