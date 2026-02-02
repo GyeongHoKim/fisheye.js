@@ -1,4 +1,4 @@
-import type { FisheyeMount, FisheyeProjection } from "@gyeonghokim/fisheye.js";
+import type { FisheyeProjection } from "@gyeonghokim/fisheye.js";
 import { Fisheye } from "@gyeonghokim/fisheye.js";
 import { html, LitElement } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
@@ -16,29 +16,25 @@ const FISHEYE_DEFAULTS = {
   centerY: -0.0452,
   balance: 0.0,
   fovScale: 0.66,
-  projection: "rectilinear" as FisheyeProjection,
-  mount: "ceiling" as FisheyeMount,
+  projection: { kind: "rectilinear" } as const satisfies FisheyeProjection,
 };
 
-/** Presets map user-facing names to mount + projection (see src/types.ts). */
+/** Presets map user-facing names to projection modes. */
 const VIEW_PRESETS = [
   {
     id: "normal",
     label: "Normal (90°)",
-    projection: "rectilinear" as FisheyeProjection,
-    mount: "ceiling" as FisheyeMount,
+    projection: { kind: "rectilinear" } as const satisfies FisheyeProjection,
   },
   {
     id: "panoramic180",
     label: "Panoramic 180°",
-    projection: "equirectangular" as FisheyeProjection,
-    mount: "ceiling" as FisheyeMount,
+    projection: { kind: "equirectangular" } as const satisfies FisheyeProjection,
   },
   {
     id: "panoramic360",
     label: "360° Panorama",
-    projection: "equirectangular" as FisheyeProjection,
-    mount: "ceiling" as FisheyeMount,
+    projection: { kind: "equirectangular" } as const satisfies FisheyeProjection,
   },
 ] as const;
 type PresetId = (typeof VIEW_PRESETS)[number]["id"];
@@ -55,7 +51,6 @@ export class FisheyeDemo extends LitElement {
   @state() private centerY = FISHEYE_DEFAULTS.centerY;
   @state() private presetId: PresetId | null = null;
   @state() private projection: FisheyeProjection = FISHEYE_DEFAULTS.projection;
-  @state() private mount: FisheyeMount = FISHEYE_DEFAULTS.mount;
   @state() private isProcessing = false;
   @state() private errorMessage = "";
   @state() private hasWebGPU = true;
@@ -160,7 +155,6 @@ export class FisheyeDemo extends LitElement {
         balance: this.balance,
         fovScale: this.fovScale,
         projection: this.projection,
-        mount: this.mount,
         cx: w * (0.5 + this.centerX),
         cy: h * (0.5 + this.centerY),
       };
@@ -239,7 +233,6 @@ export class FisheyeDemo extends LitElement {
     this.cancelProcessImageDebounce();
     this.presetId = preset.id;
     this.projection = preset.projection;
-    this.mount = preset.mount;
     this.fisheye = null;
     await this.enqueueProcessImage();
   }
@@ -251,7 +244,6 @@ export class FisheyeDemo extends LitElement {
   private resetToDefaults() {
     this.presetId = null;
     this.projection = FISHEYE_DEFAULTS.projection;
-    this.mount = FISHEYE_DEFAULTS.mount;
     this.balance = FISHEYE_DEFAULTS.balance;
     this.fovScale = FISHEYE_DEFAULTS.fovScale;
     this.k1 = FISHEYE_DEFAULTS.k1;
@@ -297,7 +289,7 @@ export class FisheyeDemo extends LitElement {
 
                     <div class="control-group">
                       <h3>View preset</h3>
-                      <p class="control-hint">Mount + projection (see src/types.ts)</p>
+                      <p class="control-hint">Projection mode (rectilinear, equirectangular, etc.)</p>
                       <div class="preset-buttons">
                         ${VIEW_PRESETS.map(
                           (p) => html`
@@ -323,7 +315,7 @@ export class FisheyeDemo extends LitElement {
 
                     <div class="control-group">
                       <h3>Camera Parameters</h3>
-                      <p class="control-hint">balance: 0 = all pixels, 1 = original FOV. fovScale: &gt;1 = zoom out, &lt;1 = zoom in.</p>
+                      <p class="control-hint">balance: 0 = no black edges, 1 = keep original FOV. fovScale: &gt;1 = widen FOV, &lt;1 = narrow FOV.</p>
                       ${this.renderSlider("balance", this.balance, 0, 1, 0.01)}
                       ${this.renderSlider("fovScale", this.fovScale, 0.1, 3, 0.01)}
                       ${this.renderSlider("centerX", this.centerX, -0.5, 0.5, 0.001)}
