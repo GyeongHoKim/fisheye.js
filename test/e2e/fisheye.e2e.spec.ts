@@ -259,7 +259,6 @@ test.describe("Fisheye E2E - Rectilinear Natural Projection", () => {
               const expectedImg = await loadImage(dewarpedPath);
               const expectedImageData = imageToImageData(expectedImg);
 
-              // NEW INTERFACE: Use newFx and newFy to explicitly control output focal length
               const fisheye = new Fisheye({
                 fx: cameraMatrix.fx,
                 fy: cameraMatrix.fy,
@@ -271,10 +270,7 @@ test.describe("Fisheye E2E - Rectilinear Natural Projection", () => {
                 k4: distortionCoeffs.k4,
                 width: outputWidth,
                 height: outputHeight,
-                projection: "rectilinear",
-                // NEW: Explicitly set output focal length for natural projection
-                newFx: newFx,
-                newFy: newFy,
+                projection: { kind: "rectilinear", mode: "manual", newFx, newFy },
               });
 
               const inputFrame = await imageToVideoFrame(originalImg);
@@ -518,7 +514,6 @@ test.describe("Fisheye E2E - Rectilinear Manual Focal Length", () => {
               const expectedImg = await loadImage(dewarpedPath);
               const expectedImageData = imageToImageData(expectedImg);
 
-              // NEW INTERFACE: Use newFx and newFy to explicitly control output focal length
               const fisheye = new Fisheye({
                 fx: cameraMatrix.fx,
                 fy: cameraMatrix.fy,
@@ -530,10 +525,7 @@ test.describe("Fisheye E2E - Rectilinear Manual Focal Length", () => {
                 k4: distortionCoeffs.k4,
                 width: outputWidth,
                 height: outputHeight,
-                projection: "rectilinear",
-                // NEW: Explicitly set output focal length for different FOV tests
-                newFx: newFx,
-                newFy: newFy,
+                projection: { kind: "rectilinear", mode: "manual", newFx, newFy },
               });
 
               const inputFrame = await imageToVideoFrame(originalImg);
@@ -774,6 +766,21 @@ test.describe("Fisheye E2E - Equirectangular Projection", () => {
               const expectedImg = await loadImage(dewarpedPath);
               const expectedImageData = imageToImageData(expectedImg);
 
+              const getProjection = (
+                kind: "rectilinear" | "equirectangular" | "original" | "cylindrical",
+              ) => {
+                switch (kind) {
+                  case "rectilinear":
+                    return { kind: "rectilinear" as const };
+                  case "equirectangular":
+                    return { kind: "equirectangular" as const };
+                  case "cylindrical":
+                    return { kind: "cylindrical" as const };
+                  case "original":
+                    return { kind: "original" as const };
+                }
+              };
+
               const fisheye = new Fisheye({
                 fx: cameraMatrix.fx,
                 fy: cameraMatrix.fy,
@@ -787,7 +794,7 @@ test.describe("Fisheye E2E - Equirectangular Projection", () => {
                 height: outputHeight,
                 balance: balance,
                 fovScale: fovScale,
-                projection: projection,
+                projection: getProjection(projection),
               });
 
               const inputFrame = await imageToVideoFrame(originalImg);
@@ -868,15 +875,13 @@ test.describe("Fisheye E2E - Equirectangular Projection", () => {
   }
 });
 
-test.describe("Fisheye E2E - Cylindrical Projection (Not Implemented)", () => {
+test.describe("Fisheye E2E - Cylindrical Projection", () => {
   const testCases = loadTestData().filter((tc) => tc.projection === "cylindrical");
 
   for (const testCase of testCases) {
     const imageName = testCase.original_image_path.split("/").pop()?.replace(".jpg", "") || "";
     const testName = `${imageName} - cam${testCase.camera_id}/${testCase.scenario}: ${testCase.description}`;
 
-    test.skip(testName, async () => {
-      // Cylindrical projection not yet implemented
-    });
+    test.skip(testName, async () => {});
   }
 });
