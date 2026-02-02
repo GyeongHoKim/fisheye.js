@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, ConsoleMessage, Page } from "@playwright/test";
 import { test as base, expect } from "@playwright/test";
 
 /** Each test gets a fresh browser context (and page) to isolate WebGPU device state. */
@@ -73,6 +73,440 @@ function loadTestData(): TestCase[] {
   return JSON.parse(data);
 }
 
+async function setupPageListeners(page: Page) {
+  const pageErrors: string[] = [];
+  const consoleMessages: { type: string; text: string }[] = [];
+
+  page.on("pageerror", (err: Error) => pageErrors.push(err.message));
+  page.on("console", (msg: ConsoleMessage) =>
+    consoleMessages.push({ type: msg.type(), text: msg.text() }),
+  );
+
+  return { pageErrors, consoleMessages };
+}
+
+async function waitForPageReady(
+  page: Page,
+  pageErrors: string[],
+  consoleMessages: { type: string; text: string }[],
+) {
+  try {
+    await page.waitForFunction(() => (window as unknown as TestWindow).testReady === true, {
+      timeout: 10000,
+    });
+  } catch (err) {
+    const diagnostics = [
+      "window.testReady did not become true (page script may have failed).",
+      pageErrors.length > 0 ? `Page errors:\n${pageErrors.map((e) => `  - ${e}`).join("\n")}` : "",
+      consoleMessages.length > 0
+        ? `Console:\n${consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    throw new Error(`${diagnostics}\n\nOriginal: ${(err as Error).message}`);
+  }
+}
+
+function logDiagnostics(
+  testName: string,
+  pageErrors: string[],
+  consoleMessages: { type: string; text: string }[],
+  message: string,
+) {
+  console.error(`[E2E] ${testName}: ${message}`);
+  if (pageErrors.length > 0) console.error("[E2E] Page errors:", pageErrors);
+  if (consoleMessages.length > 0) {
+    console.error(
+      "[E2E] Console:",
+      consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
+    );
+  }
+}
+
+type EvalResultOk = {
+  kind: "ok";
+  mse: number;
+  psnr: number;
+  maxDiff: number;
+  matchPercent: number;
+  error: string | null;
+};
+type EvalResultErr = { kind: "err"; message: string; name?: string };
+type EvalResult = EvalResultOk | EvalResultErr;
+
+async function runRectilinearTest(
+  page: Page,
+  testCase: TestCase,
+  testName: string,
+  pageErrors: string[],
+  consoleMessages: { type: string; text: string }[],
+): Promise<EvalResult> {
+  try {
+    return await page.evaluate(
+      async ({
+        originalPath,
+        dewarpedPath,
+        cameraMatrix,
+        distortionCoeffs,
+        outputWidth,
+        outputHeight,
+        newFx,
+        newFy,
+      }): Promise<EvalResult> => {
+        const loadImage = async (path: string): Promise<HTMLImageElement> => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = `/test/fixture/${path}`;
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`Failed to load: ${path}`));
+          });
+          return img;
+        };
+
+        const imageToImageData = (img: HTMLImageElement): ImageData => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Could not get canvas context");
+          ctx.drawImage(img, 0, 0);
+          return ctx.getImageData(0, 0, canvas.width, canvas.height);
+        };
+
+        const imageToVideoFrame = async (img: HTMLImageElement): Promise<VideoFrame> => {
+          const bitmap = await createImageBitmap(img);
+          return new VideoFrame(bitmap, { timestamp: 0 });
+        };
+
+        const videoFrameToImageData = async (frame: VideoFrame): Promise<ImageData> => {
+          const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Could not get canvas context");
+          ctx.drawImage(frame, 0, 0);
+          return ctx.getImageData(0, 0, frame.displayWidth, frame.displayHeight);
+        };
+
+        function pixelStats(
+          actual: Uint8ClampedArray,
+          expected: Uint8ClampedArray,
+          threshold: number,
+        ): { sumSquaredError: number; maxDiff: number; matchCount: number } {
+          let sumSquaredError = 0;
+          let maxDiff = 0;
+          let matchCount = 0;
+          for (let i = 0; i < actual.length; i += 4) {
+            const dr = Math.abs(actual[i] - expected[i]);
+            const dg = Math.abs(actual[i + 1] - expected[i + 1]);
+            const db = Math.abs(actual[i + 2] - expected[i + 2]);
+            sumSquaredError += dr * dr + dg * dg + db * db;
+            const pixelDiff = Math.max(dr, dg, db);
+            maxDiff = Math.max(maxDiff, pixelDiff);
+            if (pixelDiff <= threshold) matchCount++;
+          }
+          return { sumSquaredError, maxDiff, matchCount };
+        }
+
+        function comparePixels(
+          actualData: ImageData,
+          expectedData: ImageData,
+        ): {
+          mse: number;
+          psnr: number;
+          maxDiff: number;
+          matchPercent: number;
+          error: string | null;
+        } {
+          const actual = actualData.data;
+          const expected = expectedData.data;
+          if (actual.length !== expected.length) {
+            return {
+              error: `Size mismatch: actual=${actual.length} (${actualData.width}x${actualData.height}), expected=${expected.length} (${expectedData.width}x${expectedData.height})`,
+              mse: -1,
+              psnr: -1,
+              maxDiff: -1,
+              matchPercent: 0,
+            };
+          }
+          const threshold = 10;
+          const numPixels = actual.length / 4;
+          const { sumSquaredError, maxDiff, matchCount } = pixelStats(actual, expected, threshold);
+          const mse = sumSquaredError / (numPixels * 3);
+          const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
+          const matchPercent = (matchCount / numPixels) * 100;
+          return { mse, psnr, maxDiff, matchPercent, error: null };
+        }
+
+        try {
+          const Fisheye = (
+            window as unknown as { Fisheye: typeof import("../../src/fisheye").Fisheye }
+          ).Fisheye;
+
+          const originalImg = await loadImage(originalPath);
+          const expectedImg = await loadImage(dewarpedPath);
+          const expectedImageData = imageToImageData(expectedImg);
+
+          const fisheye = new Fisheye({
+            fx: cameraMatrix.fx,
+            fy: cameraMatrix.fy,
+            cx: cameraMatrix.cx,
+            cy: cameraMatrix.cy,
+            k1: distortionCoeffs.k1,
+            k2: distortionCoeffs.k2,
+            k3: distortionCoeffs.k3,
+            k4: distortionCoeffs.k4,
+            width: outputWidth,
+            height: outputHeight,
+            projection: { kind: "rectilinear", mode: "manual", newFx, newFy },
+          });
+
+          const inputFrame = await imageToVideoFrame(originalImg);
+          const outputFrame = await fisheye.undistort(inputFrame);
+          const resultImageData = await videoFrameToImageData(outputFrame);
+          inputFrame.close();
+          outputFrame.close();
+          fisheye.destroy();
+
+          const compare = comparePixels(resultImageData, expectedImageData);
+          return { kind: "ok", ...compare };
+        } catch (e) {
+          const err = e as Error;
+          return {
+            kind: "err",
+            message: err?.message ?? String(e),
+            name: err?.name,
+          };
+        }
+      },
+      {
+        originalPath: testCase.original_image_path,
+        dewarpedPath: testCase.dewarped_image_path,
+        cameraMatrix: testCase.camera_matrix,
+        distortionCoeffs: testCase.distortion_coefficients,
+        outputWidth: testCase.output_width,
+        outputHeight: testCase.output_height,
+        newFx: testCase.manual_fx ?? testCase.camera_matrix.fx,
+        newFy: testCase.manual_fy ?? testCase.camera_matrix.fy,
+      },
+    );
+  } catch (evalErr) {
+    logDiagnostics(
+      testName,
+      pageErrors,
+      consoleMessages,
+      `page.evaluate threw: ${(evalErr as Error).message}`,
+    );
+    throw evalErr;
+  }
+}
+
+async function runProjectionTest(
+  page: Page,
+  testCase: TestCase,
+  testName: string,
+  pageErrors: string[],
+  consoleMessages: { type: string; text: string }[],
+): Promise<EvalResult> {
+  try {
+    return await page.evaluate(
+      async ({
+        originalPath,
+        dewarpedPath,
+        cameraMatrix,
+        distortionCoeffs,
+        outputWidth,
+        outputHeight,
+        projection,
+        balance,
+        fovScale,
+      }): Promise<EvalResult> => {
+        const loadImage = async (path: string): Promise<HTMLImageElement> => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = `/test/fixture/${path}`;
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`Failed to load: ${path}`));
+          });
+          return img;
+        };
+
+        const imageToImageData = (img: HTMLImageElement): ImageData => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Could not get canvas context");
+          ctx.drawImage(img, 0, 0);
+          return ctx.getImageData(0, 0, canvas.width, canvas.height);
+        };
+
+        const imageToVideoFrame = async (img: HTMLImageElement): Promise<VideoFrame> => {
+          const bitmap = await createImageBitmap(img);
+          return new VideoFrame(bitmap, { timestamp: 0 });
+        };
+
+        const videoFrameToImageData = async (frame: VideoFrame): Promise<ImageData> => {
+          const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Could not get canvas context");
+          ctx.drawImage(frame, 0, 0);
+          return ctx.getImageData(0, 0, frame.displayWidth, frame.displayHeight);
+        };
+
+        function pixelStats(
+          actual: Uint8ClampedArray,
+          expected: Uint8ClampedArray,
+          threshold: number,
+        ): { sumSquaredError: number; maxDiff: number; matchCount: number } {
+          let sumSquaredError = 0;
+          let maxDiff = 0;
+          let matchCount = 0;
+          for (let i = 0; i < actual.length; i += 4) {
+            const dr = Math.abs(actual[i] - expected[i]);
+            const dg = Math.abs(actual[i + 1] - expected[i + 1]);
+            const db = Math.abs(actual[i + 2] - expected[i + 2]);
+            sumSquaredError += dr * dr + dg * dg + db * db;
+            const pixelDiff = Math.max(dr, dg, db);
+            maxDiff = Math.max(maxDiff, pixelDiff);
+            if (pixelDiff <= threshold) matchCount++;
+          }
+          return { sumSquaredError, maxDiff, matchCount };
+        }
+
+        function comparePixels(
+          actualData: ImageData,
+          expectedData: ImageData,
+        ): {
+          mse: number;
+          psnr: number;
+          maxDiff: number;
+          matchPercent: number;
+          error: string | null;
+        } {
+          const actual = actualData.data;
+          const expected = expectedData.data;
+          if (actual.length !== expected.length) {
+            return {
+              error: `Size mismatch: actual=${actual.length} (${actualData.width}x${actualData.height}), expected=${expected.length} (${expectedData.width}x${expectedData.height})`,
+              mse: -1,
+              psnr: -1,
+              maxDiff: -1,
+              matchPercent: 0,
+            };
+          }
+          const threshold = 10;
+          const numPixels = actual.length / 4;
+          const { sumSquaredError, maxDiff, matchCount } = pixelStats(actual, expected, threshold);
+          const mse = sumSquaredError / (numPixels * 3);
+          const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
+          const matchPercent = (matchCount / numPixels) * 100;
+          return { mse, psnr, maxDiff, matchPercent, error: null };
+        }
+
+        try {
+          const Fisheye = (
+            window as unknown as { Fisheye: typeof import("../../src/fisheye").Fisheye }
+          ).Fisheye;
+
+          const originalImg = await loadImage(originalPath);
+          const expectedImg = await loadImage(dewarpedPath);
+          const expectedImageData = imageToImageData(expectedImg);
+
+          const getProjection = (
+            kind: "rectilinear" | "equirectangular" | "original" | "cylindrical",
+          ) => {
+            switch (kind) {
+              case "rectilinear":
+                return { kind: "rectilinear" as const };
+              case "equirectangular":
+                return { kind: "equirectangular" as const };
+              case "cylindrical":
+                return { kind: "cylindrical" as const };
+              case "original":
+                return { kind: "original" as const };
+            }
+          };
+
+          const fisheye = new Fisheye({
+            fx: cameraMatrix.fx,
+            fy: cameraMatrix.fy,
+            cx: cameraMatrix.cx,
+            cy: cameraMatrix.cy,
+            k1: distortionCoeffs.k1,
+            k2: distortionCoeffs.k2,
+            k3: distortionCoeffs.k3,
+            k4: distortionCoeffs.k4,
+            width: outputWidth,
+            height: outputHeight,
+            balance: balance,
+            fovScale: fovScale,
+            projection: getProjection(projection),
+          });
+
+          const inputFrame = await imageToVideoFrame(originalImg);
+          const outputFrame = await fisheye.undistort(inputFrame);
+          const resultImageData = await videoFrameToImageData(outputFrame);
+          inputFrame.close();
+          outputFrame.close();
+          fisheye.destroy();
+
+          const compare = comparePixels(resultImageData, expectedImageData);
+          return { kind: "ok", ...compare };
+        } catch (e) {
+          const err = e as Error;
+          return {
+            kind: "err",
+            message: err?.message ?? String(e),
+            name: err?.name,
+          };
+        }
+      },
+      {
+        originalPath: testCase.original_image_path,
+        dewarpedPath: testCase.dewarped_image_path,
+        cameraMatrix: testCase.camera_matrix,
+        distortionCoeffs: testCase.distortion_coefficients,
+        outputWidth: testCase.output_width,
+        outputHeight: testCase.output_height,
+        projection: testCase.projection,
+        balance: testCase.balance,
+        fovScale: testCase.fov_scale,
+      },
+    );
+  } catch (evalErr) {
+    logDiagnostics(
+      testName,
+      pageErrors,
+      consoleMessages,
+      `page.evaluate threw: ${(evalErr as Error).message}`,
+    );
+    throw evalErr;
+  }
+}
+
+function handleTestResult(
+  result: EvalResult,
+  testName: string,
+  pageErrors: string[],
+  consoleMessages: { type: string; text: string }[],
+) {
+  if (result.kind === "err") {
+    logDiagnostics(
+      testName,
+      pageErrors,
+      consoleMessages,
+      `in-page error: ${result.name ?? "Error"}: ${result.message}`,
+    );
+    throw new Error(`Dewarp failed in page: ${result.message}`);
+  }
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+}
+
 test.describe("Fisheye E2E - WebGPU Availability", () => {
   test("WebGPU loads (API available)", async ({ page }) => {
     const pageErrors: string[] = [];
@@ -104,231 +538,27 @@ test.describe("Fisheye E2E - Rectilinear Natural Projection", () => {
     const imageName = testCase.original_image_path.split("/").pop()?.replace(".jpg", "") || "";
     const testName = `${imageName} - cam${testCase.camera_id}/${testCase.scenario}: ${testCase.description}`;
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: E2E callback does setup, in-page evaluate, and assertions.
     test(testName, async ({ page }) => {
-      const pageErrors: string[] = [];
-      const consoleMessages: { type: string; text: string }[] = [];
-
-      page.on("pageerror", (err) => pageErrors.push(err.message));
-      page.on("console", (msg) => consoleMessages.push({ type: msg.type(), text: msg.text() }));
+      const { pageErrors, consoleMessages } = await setupPageListeners(page);
 
       await page.goto("/test/e2e/test-page.html");
-
-      try {
-        await page.waitForFunction(() => (window as unknown as TestWindow).testReady === true, {
-          timeout: 10000,
-        });
-      } catch (err) {
-        const diagnostics = [
-          "window.testReady did not become true (page script may have failed).",
-          pageErrors.length > 0
-            ? `Page errors:\n${pageErrors.map((e) => `  - ${e}`).join("\n")}`
-            : "",
-          consoleMessages.length > 0
-            ? `Console:\n${consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        throw new Error(`${diagnostics}\n\nOriginal: ${(err as Error).message}`);
-      }
+      await waitForPageReady(page, pageErrors, consoleMessages);
 
       const webgpuAvailable = await page.evaluate(
         () => (window as unknown as TestWindow).webgpuAvailable,
       );
       expect(webgpuAvailable, "WebGPU must be available for pixel comparison").toBe(true);
 
-      type EvalResultOk = {
-        kind: "ok";
-        mse: number;
-        psnr: number;
-        maxDiff: number;
-        matchPercent: number;
-        error: string | null;
-      };
-      type EvalResultErr = { kind: "err"; message: string; name?: string };
-      type EvalResult = EvalResultOk | EvalResultErr;
+      const result = await runRectilinearTest(
+        page,
+        testCase,
+        testName,
+        pageErrors,
+        consoleMessages,
+      );
+      handleTestResult(result, testName, pageErrors, consoleMessages);
 
-      let result: EvalResult;
-      try {
-        result = await page.evaluate(
-          async ({
-            originalPath,
-            dewarpedPath,
-            cameraMatrix,
-            distortionCoeffs,
-            outputWidth,
-            outputHeight,
-            newFx,
-            newFy,
-          }): Promise<EvalResult> => {
-            const loadImage = async (path: string): Promise<HTMLImageElement> => {
-              const img = new Image();
-              img.crossOrigin = "anonymous";
-              img.src = `/test/fixture/${path}`;
-              await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error(`Failed to load: ${path}`));
-              });
-              return img;
-            };
-
-            const imageToImageData = (img: HTMLImageElement): ImageData => {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) throw new Error("Could not get canvas context");
-              ctx.drawImage(img, 0, 0);
-              return ctx.getImageData(0, 0, canvas.width, canvas.height);
-            };
-
-            const imageToVideoFrame = async (img: HTMLImageElement): Promise<VideoFrame> => {
-              const bitmap = await createImageBitmap(img);
-              return new VideoFrame(bitmap, { timestamp: 0 });
-            };
-
-            const videoFrameToImageData = async (frame: VideoFrame): Promise<ImageData> => {
-              const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
-              const ctx = canvas.getContext("2d");
-              if (!ctx) throw new Error("Could not get canvas context");
-              ctx.drawImage(frame, 0, 0);
-              return ctx.getImageData(0, 0, frame.displayWidth, frame.displayHeight);
-            };
-
-            function pixelStats(
-              actual: Uint8ClampedArray,
-              expected: Uint8ClampedArray,
-              threshold: number,
-            ): { sumSquaredError: number; maxDiff: number; matchCount: number } {
-              let sumSquaredError = 0;
-              let maxDiff = 0;
-              let matchCount = 0;
-              for (let i = 0; i < actual.length; i += 4) {
-                const dr = Math.abs(actual[i] - expected[i]);
-                const dg = Math.abs(actual[i + 1] - expected[i + 1]);
-                const db = Math.abs(actual[i + 2] - expected[i + 2]);
-                sumSquaredError += dr * dr + dg * dg + db * db;
-                const pixelDiff = Math.max(dr, dg, db);
-                maxDiff = Math.max(maxDiff, pixelDiff);
-                if (pixelDiff <= threshold) matchCount++;
-              }
-              return { sumSquaredError, maxDiff, matchCount };
-            }
-
-            function comparePixels(
-              actualData: ImageData,
-              expectedData: ImageData,
-            ): {
-              mse: number;
-              psnr: number;
-              maxDiff: number;
-              matchPercent: number;
-              error: string | null;
-            } {
-              const actual = actualData.data;
-              const expected = expectedData.data;
-              if (actual.length !== expected.length) {
-                return {
-                  error: `Size mismatch: actual=${actual.length} (${actualData.width}x${actualData.height}), expected=${expected.length} (${expectedData.width}x${expectedData.height})`,
-                  mse: -1,
-                  psnr: -1,
-                  maxDiff: -1,
-                  matchPercent: 0,
-                };
-              }
-              const threshold = 10;
-              const numPixels = actual.length / 4;
-              const { sumSquaredError, maxDiff, matchCount } = pixelStats(
-                actual,
-                expected,
-                threshold,
-              );
-              const mse = sumSquaredError / (numPixels * 3);
-              const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
-              const matchPercent = (matchCount / numPixels) * 100;
-              return { mse, psnr, maxDiff, matchPercent, error: null };
-            }
-
-            try {
-              const Fisheye = (
-                window as unknown as { Fisheye: typeof import("../../src/fisheye").Fisheye }
-              ).Fisheye;
-
-              const originalImg = await loadImage(originalPath);
-              const expectedImg = await loadImage(dewarpedPath);
-              const expectedImageData = imageToImageData(expectedImg);
-
-              const fisheye = new Fisheye({
-                fx: cameraMatrix.fx,
-                fy: cameraMatrix.fy,
-                cx: cameraMatrix.cx,
-                cy: cameraMatrix.cy,
-                k1: distortionCoeffs.k1,
-                k2: distortionCoeffs.k2,
-                k3: distortionCoeffs.k3,
-                k4: distortionCoeffs.k4,
-                width: outputWidth,
-                height: outputHeight,
-                projection: { kind: "rectilinear", mode: "manual", newFx, newFy },
-              });
-
-              const inputFrame = await imageToVideoFrame(originalImg);
-              const outputFrame = await fisheye.undistort(inputFrame);
-              const resultImageData = await videoFrameToImageData(outputFrame);
-              inputFrame.close();
-              outputFrame.close();
-              fisheye.destroy();
-
-              const compare = comparePixels(resultImageData, expectedImageData);
-              return { kind: "ok", ...compare };
-            } catch (e) {
-              const err = e as Error;
-              return {
-                kind: "err",
-                message: err?.message ?? String(e),
-                name: err?.name,
-              };
-            }
-          },
-          {
-            originalPath: testCase.original_image_path,
-            dewarpedPath: testCase.dewarped_image_path,
-            cameraMatrix: testCase.camera_matrix,
-            distortionCoeffs: testCase.distortion_coefficients,
-            outputWidth: testCase.output_width,
-            outputHeight: testCase.output_height,
-            newFx: testCase.manual_fx ?? testCase.camera_matrix.fx,
-            newFy: testCase.manual_fy ?? testCase.camera_matrix.fy,
-          },
-        );
-      } catch (evalErr) {
-        console.error(`[E2E] ${testName}: page.evaluate threw:`, (evalErr as Error).message);
-        if (pageErrors.length > 0) {
-          console.error("[E2E] Page errors:", pageErrors);
-        }
-        if (consoleMessages.length > 0) {
-          console.error(
-            "[E2E] Console:",
-            consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
-          );
-        }
-        throw evalErr;
-      }
-
-      if (result.kind === "err") {
-        console.error(
-          `[E2E] ${testName}: in-page error: ${result.name ?? "Error"}: ${result.message}`,
-        );
-        if (pageErrors.length > 0) console.error("[E2E] Page errors:", pageErrors);
-        if (consoleMessages.length > 0) {
-          console.error(
-            "[E2E] Console:",
-            consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
-          );
-        }
-        throw new Error(`Dewarp failed in page: ${result.message}`);
-      }
+      if (result.kind !== "ok") return;
 
       console.log(`${testName}:`);
       console.log(`  Output: ${testCase.output_width}x${testCase.output_height}`);
@@ -336,11 +566,6 @@ test.describe("Fisheye E2E - Rectilinear Natural Projection", () => {
       console.log(`  MSE: ${result.mse.toFixed(2)}, PSNR: ${result.psnr.toFixed(2)} dB`);
       console.log(`  Max diff: ${result.maxDiff}, Match: ${result.matchPercent.toFixed(2)}%`);
 
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      // Thresholds for passing
       expect(result.mse).toBeLessThan(100);
       expect(result.psnr).toBeGreaterThan(30);
       expect(result.matchPercent).toBeGreaterThan(90);
@@ -359,231 +584,27 @@ test.describe("Fisheye E2E - Rectilinear Manual Focal Length", () => {
     const imageName = testCase.original_image_path.split("/").pop()?.replace(".jpg", "") || "";
     const testName = `${imageName} - cam${testCase.camera_id}/${testCase.scenario}: ${testCase.description}`;
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: E2E callback does setup, in-page evaluate, and assertions.
     test(testName, async ({ page }) => {
-      const pageErrors: string[] = [];
-      const consoleMessages: { type: string; text: string }[] = [];
-
-      page.on("pageerror", (err) => pageErrors.push(err.message));
-      page.on("console", (msg) => consoleMessages.push({ type: msg.type(), text: msg.text() }));
+      const { pageErrors, consoleMessages } = await setupPageListeners(page);
 
       await page.goto("/test/e2e/test-page.html");
-
-      try {
-        await page.waitForFunction(() => (window as unknown as TestWindow).testReady === true, {
-          timeout: 10000,
-        });
-      } catch (err) {
-        const diagnostics = [
-          "window.testReady did not become true (page script may have failed).",
-          pageErrors.length > 0
-            ? `Page errors:\n${pageErrors.map((e) => `  - ${e}`).join("\n")}`
-            : "",
-          consoleMessages.length > 0
-            ? `Console:\n${consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        throw new Error(`${diagnostics}\n\nOriginal: ${(err as Error).message}`);
-      }
+      await waitForPageReady(page, pageErrors, consoleMessages);
 
       const webgpuAvailable = await page.evaluate(
         () => (window as unknown as TestWindow).webgpuAvailable,
       );
       expect(webgpuAvailable, "WebGPU must be available for pixel comparison").toBe(true);
 
-      type EvalResultOk = {
-        kind: "ok";
-        mse: number;
-        psnr: number;
-        maxDiff: number;
-        matchPercent: number;
-        error: string | null;
-      };
-      type EvalResultErr = { kind: "err"; message: string; name?: string };
-      type EvalResult = EvalResultOk | EvalResultErr;
+      const result = await runRectilinearTest(
+        page,
+        testCase,
+        testName,
+        pageErrors,
+        consoleMessages,
+      );
+      handleTestResult(result, testName, pageErrors, consoleMessages);
 
-      let result: EvalResult;
-      try {
-        result = await page.evaluate(
-          async ({
-            originalPath,
-            dewarpedPath,
-            cameraMatrix,
-            distortionCoeffs,
-            outputWidth,
-            outputHeight,
-            newFx,
-            newFy,
-          }): Promise<EvalResult> => {
-            const loadImage = async (path: string): Promise<HTMLImageElement> => {
-              const img = new Image();
-              img.crossOrigin = "anonymous";
-              img.src = `/test/fixture/${path}`;
-              await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error(`Failed to load: ${path}`));
-              });
-              return img;
-            };
-
-            const imageToImageData = (img: HTMLImageElement): ImageData => {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) throw new Error("Could not get canvas context");
-              ctx.drawImage(img, 0, 0);
-              return ctx.getImageData(0, 0, canvas.width, canvas.height);
-            };
-
-            const imageToVideoFrame = async (img: HTMLImageElement): Promise<VideoFrame> => {
-              const bitmap = await createImageBitmap(img);
-              return new VideoFrame(bitmap, { timestamp: 0 });
-            };
-
-            const videoFrameToImageData = async (frame: VideoFrame): Promise<ImageData> => {
-              const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
-              const ctx = canvas.getContext("2d");
-              if (!ctx) throw new Error("Could not get canvas context");
-              ctx.drawImage(frame, 0, 0);
-              return ctx.getImageData(0, 0, frame.displayWidth, frame.displayHeight);
-            };
-
-            function pixelStats(
-              actual: Uint8ClampedArray,
-              expected: Uint8ClampedArray,
-              threshold: number,
-            ): { sumSquaredError: number; maxDiff: number; matchCount: number } {
-              let sumSquaredError = 0;
-              let maxDiff = 0;
-              let matchCount = 0;
-              for (let i = 0; i < actual.length; i += 4) {
-                const dr = Math.abs(actual[i] - expected[i]);
-                const dg = Math.abs(actual[i + 1] - expected[i + 1]);
-                const db = Math.abs(actual[i + 2] - expected[i + 2]);
-                sumSquaredError += dr * dr + dg * dg + db * db;
-                const pixelDiff = Math.max(dr, dg, db);
-                maxDiff = Math.max(maxDiff, pixelDiff);
-                if (pixelDiff <= threshold) matchCount++;
-              }
-              return { sumSquaredError, maxDiff, matchCount };
-            }
-
-            function comparePixels(
-              actualData: ImageData,
-              expectedData: ImageData,
-            ): {
-              mse: number;
-              psnr: number;
-              maxDiff: number;
-              matchPercent: number;
-              error: string | null;
-            } {
-              const actual = actualData.data;
-              const expected = expectedData.data;
-              if (actual.length !== expected.length) {
-                return {
-                  error: `Size mismatch: actual=${actual.length} (${actualData.width}x${actualData.height}), expected=${expected.length} (${expectedData.width}x${expectedData.height})`,
-                  mse: -1,
-                  psnr: -1,
-                  maxDiff: -1,
-                  matchPercent: 0,
-                };
-              }
-              const threshold = 10;
-              const numPixels = actual.length / 4;
-              const { sumSquaredError, maxDiff, matchCount } = pixelStats(
-                actual,
-                expected,
-                threshold,
-              );
-              const mse = sumSquaredError / (numPixels * 3);
-              const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
-              const matchPercent = (matchCount / numPixels) * 100;
-              return { mse, psnr, maxDiff, matchPercent, error: null };
-            }
-
-            try {
-              const Fisheye = (
-                window as unknown as { Fisheye: typeof import("../../src/fisheye").Fisheye }
-              ).Fisheye;
-
-              const originalImg = await loadImage(originalPath);
-              const expectedImg = await loadImage(dewarpedPath);
-              const expectedImageData = imageToImageData(expectedImg);
-
-              const fisheye = new Fisheye({
-                fx: cameraMatrix.fx,
-                fy: cameraMatrix.fy,
-                cx: cameraMatrix.cx,
-                cy: cameraMatrix.cy,
-                k1: distortionCoeffs.k1,
-                k2: distortionCoeffs.k2,
-                k3: distortionCoeffs.k3,
-                k4: distortionCoeffs.k4,
-                width: outputWidth,
-                height: outputHeight,
-                projection: { kind: "rectilinear", mode: "manual", newFx, newFy },
-              });
-
-              const inputFrame = await imageToVideoFrame(originalImg);
-              const outputFrame = await fisheye.undistort(inputFrame);
-              const resultImageData = await videoFrameToImageData(outputFrame);
-              inputFrame.close();
-              outputFrame.close();
-              fisheye.destroy();
-
-              const compare = comparePixels(resultImageData, expectedImageData);
-              return { kind: "ok", ...compare };
-            } catch (e) {
-              const err = e as Error;
-              return {
-                kind: "err",
-                message: err?.message ?? String(e),
-                name: err?.name,
-              };
-            }
-          },
-          {
-            originalPath: testCase.original_image_path,
-            dewarpedPath: testCase.dewarped_image_path,
-            cameraMatrix: testCase.camera_matrix,
-            distortionCoeffs: testCase.distortion_coefficients,
-            outputWidth: testCase.output_width,
-            outputHeight: testCase.output_height,
-            newFx: testCase.manual_fx ?? testCase.camera_matrix.fx,
-            newFy: testCase.manual_fy ?? testCase.camera_matrix.fy,
-          },
-        );
-      } catch (evalErr) {
-        console.error(`[E2E] ${testName}: page.evaluate threw:`, (evalErr as Error).message);
-        if (pageErrors.length > 0) {
-          console.error("[E2E] Page errors:", pageErrors);
-        }
-        if (consoleMessages.length > 0) {
-          console.error(
-            "[E2E] Console:",
-            consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
-          );
-        }
-        throw evalErr;
-      }
-
-      if (result.kind === "err") {
-        console.error(
-          `[E2E] ${testName}: in-page error: ${result.name ?? "Error"}: ${result.message}`,
-        );
-        if (pageErrors.length > 0) console.error("[E2E] Page errors:", pageErrors);
-        if (consoleMessages.length > 0) {
-          console.error(
-            "[E2E] Console:",
-            consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
-          );
-        }
-        throw new Error(`Dewarp failed in page: ${result.message}`);
-      }
+      if (result.kind !== "ok") return;
 
       console.log(`${testName}:`);
       console.log(`  Output: ${testCase.output_width}x${testCase.output_height}`);
@@ -591,11 +612,6 @@ test.describe("Fisheye E2E - Rectilinear Manual Focal Length", () => {
       console.log(`  MSE: ${result.mse.toFixed(2)}, PSNR: ${result.psnr.toFixed(2)} dB`);
       console.log(`  Max diff: ${result.maxDiff}, Match: ${result.matchPercent.toFixed(2)}%`);
 
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      // Thresholds for passing
       expect(result.mse).toBeLessThan(100);
       expect(result.psnr).toBeGreaterThan(30);
       expect(result.matchPercent).toBeGreaterThan(90);
@@ -610,250 +626,21 @@ test.describe("Fisheye E2E - Equirectangular Projection", () => {
     const imageName = testCase.original_image_path.split("/").pop()?.replace(".jpg", "") || "";
     const testName = `${imageName} - cam${testCase.camera_id}/${testCase.scenario}: ${testCase.description}`;
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: E2E callback does setup, in-page evaluate, and assertions.
     test(testName, async ({ page }) => {
-      const pageErrors: string[] = [];
-      const consoleMessages: { type: string; text: string }[] = [];
-
-      page.on("pageerror", (err) => pageErrors.push(err.message));
-      page.on("console", (msg) => consoleMessages.push({ type: msg.type(), text: msg.text() }));
+      const { pageErrors, consoleMessages } = await setupPageListeners(page);
 
       await page.goto("/test/e2e/test-page.html");
-
-      try {
-        await page.waitForFunction(() => (window as unknown as TestWindow).testReady === true, {
-          timeout: 10000,
-        });
-      } catch (err) {
-        const diagnostics = [
-          "window.testReady did not become true (page script may have failed).",
-          pageErrors.length > 0
-            ? `Page errors:\n${pageErrors.map((e) => `  - ${e}`).join("\n")}`
-            : "",
-          consoleMessages.length > 0
-            ? `Console:\n${consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        throw new Error(`${diagnostics}\n\nOriginal: ${(err as Error).message}`);
-      }
+      await waitForPageReady(page, pageErrors, consoleMessages);
 
       const webgpuAvailable = await page.evaluate(
         () => (window as unknown as TestWindow).webgpuAvailable,
       );
       expect(webgpuAvailable, "WebGPU must be available for pixel comparison").toBe(true);
 
-      type EvalResultOk = {
-        kind: "ok";
-        mse: number;
-        psnr: number;
-        maxDiff: number;
-        matchPercent: number;
-        error: string | null;
-      };
-      type EvalResultErr = { kind: "err"; message: string; name?: string };
-      type EvalResult = EvalResultOk | EvalResultErr;
+      const result = await runProjectionTest(page, testCase, testName, pageErrors, consoleMessages);
+      handleTestResult(result, testName, pageErrors, consoleMessages);
 
-      let result: EvalResult;
-      try {
-        result = await page.evaluate(
-          async ({
-            originalPath,
-            dewarpedPath,
-            cameraMatrix,
-            distortionCoeffs,
-            outputWidth,
-            outputHeight,
-            projection,
-            balance,
-            fovScale,
-          }): Promise<EvalResult> => {
-            const loadImage = async (path: string): Promise<HTMLImageElement> => {
-              const img = new Image();
-              img.crossOrigin = "anonymous";
-              img.src = `/test/fixture/${path}`;
-              await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error(`Failed to load: ${path}`));
-              });
-              return img;
-            };
-
-            const imageToImageData = (img: HTMLImageElement): ImageData => {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) throw new Error("Could not get canvas context");
-              ctx.drawImage(img, 0, 0);
-              return ctx.getImageData(0, 0, canvas.width, canvas.height);
-            };
-
-            const imageToVideoFrame = async (img: HTMLImageElement): Promise<VideoFrame> => {
-              const bitmap = await createImageBitmap(img);
-              return new VideoFrame(bitmap, { timestamp: 0 });
-            };
-
-            const videoFrameToImageData = async (frame: VideoFrame): Promise<ImageData> => {
-              const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
-              const ctx = canvas.getContext("2d");
-              if (!ctx) throw new Error("Could not get canvas context");
-              ctx.drawImage(frame, 0, 0);
-              return ctx.getImageData(0, 0, frame.displayWidth, frame.displayHeight);
-            };
-
-            function pixelStats(
-              actual: Uint8ClampedArray,
-              expected: Uint8ClampedArray,
-              threshold: number,
-            ): { sumSquaredError: number; maxDiff: number; matchCount: number } {
-              let sumSquaredError = 0;
-              let maxDiff = 0;
-              let matchCount = 0;
-              for (let i = 0; i < actual.length; i += 4) {
-                const dr = Math.abs(actual[i] - expected[i]);
-                const dg = Math.abs(actual[i + 1] - expected[i + 1]);
-                const db = Math.abs(actual[i + 2] - expected[i + 2]);
-                sumSquaredError += dr * dr + dg * dg + db * db;
-                const pixelDiff = Math.max(dr, dg, db);
-                maxDiff = Math.max(maxDiff, pixelDiff);
-                if (pixelDiff <= threshold) matchCount++;
-              }
-              return { sumSquaredError, maxDiff, matchCount };
-            }
-
-            function comparePixels(
-              actualData: ImageData,
-              expectedData: ImageData,
-            ): {
-              mse: number;
-              psnr: number;
-              maxDiff: number;
-              matchPercent: number;
-              error: string | null;
-            } {
-              const actual = actualData.data;
-              const expected = expectedData.data;
-              if (actual.length !== expected.length) {
-                return {
-                  error: `Size mismatch: actual=${actual.length} (${actualData.width}x${actualData.height}), expected=${expected.length} (${expectedData.width}x${expectedData.height})`,
-                  mse: -1,
-                  psnr: -1,
-                  maxDiff: -1,
-                  matchPercent: 0,
-                };
-              }
-              const threshold = 10;
-              const numPixels = actual.length / 4;
-              const { sumSquaredError, maxDiff, matchCount } = pixelStats(
-                actual,
-                expected,
-                threshold,
-              );
-              const mse = sumSquaredError / (numPixels * 3);
-              const psnr = mse === 0 ? Infinity : 20 * Math.log10(255) - 10 * Math.log10(mse);
-              const matchPercent = (matchCount / numPixels) * 100;
-              return { mse, psnr, maxDiff, matchPercent, error: null };
-            }
-
-            try {
-              const Fisheye = (
-                window as unknown as { Fisheye: typeof import("../../src/fisheye").Fisheye }
-              ).Fisheye;
-
-              const originalImg = await loadImage(originalPath);
-              const expectedImg = await loadImage(dewarpedPath);
-              const expectedImageData = imageToImageData(expectedImg);
-
-              const getProjection = (
-                kind: "rectilinear" | "equirectangular" | "original" | "cylindrical",
-              ) => {
-                switch (kind) {
-                  case "rectilinear":
-                    return { kind: "rectilinear" as const };
-                  case "equirectangular":
-                    return { kind: "equirectangular" as const };
-                  case "cylindrical":
-                    return { kind: "cylindrical" as const };
-                  case "original":
-                    return { kind: "original" as const };
-                }
-              };
-
-              const fisheye = new Fisheye({
-                fx: cameraMatrix.fx,
-                fy: cameraMatrix.fy,
-                cx: cameraMatrix.cx,
-                cy: cameraMatrix.cy,
-                k1: distortionCoeffs.k1,
-                k2: distortionCoeffs.k2,
-                k3: distortionCoeffs.k3,
-                k4: distortionCoeffs.k4,
-                width: outputWidth,
-                height: outputHeight,
-                balance: balance,
-                fovScale: fovScale,
-                projection: getProjection(projection),
-              });
-
-              const inputFrame = await imageToVideoFrame(originalImg);
-              const outputFrame = await fisheye.undistort(inputFrame);
-              const resultImageData = await videoFrameToImageData(outputFrame);
-              inputFrame.close();
-              outputFrame.close();
-              fisheye.destroy();
-
-              const compare = comparePixels(resultImageData, expectedImageData);
-              return { kind: "ok", ...compare };
-            } catch (e) {
-              const err = e as Error;
-              return {
-                kind: "err",
-                message: err?.message ?? String(e),
-                name: err?.name,
-              };
-            }
-          },
-          {
-            originalPath: testCase.original_image_path,
-            dewarpedPath: testCase.dewarped_image_path,
-            cameraMatrix: testCase.camera_matrix,
-            distortionCoeffs: testCase.distortion_coefficients,
-            outputWidth: testCase.output_width,
-            outputHeight: testCase.output_height,
-            projection: testCase.projection,
-            balance: testCase.balance,
-            fovScale: testCase.fov_scale,
-          },
-        );
-      } catch (evalErr) {
-        console.error(`[E2E] ${testName}: page.evaluate threw:`, (evalErr as Error).message);
-        if (pageErrors.length > 0) {
-          console.error("[E2E] Page errors:", pageErrors);
-        }
-        if (consoleMessages.length > 0) {
-          console.error(
-            "[E2E] Console:",
-            consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
-          );
-        }
-        throw evalErr;
-      }
-
-      if (result.kind === "err") {
-        console.error(
-          `[E2E] ${testName}: in-page error: ${result.name ?? "Error"}: ${result.message}`,
-        );
-        if (pageErrors.length > 0) console.error("[E2E] Page errors:", pageErrors);
-        if (consoleMessages.length > 0) {
-          console.error(
-            "[E2E] Console:",
-            consoleMessages.map((m) => `  [${m.type}] ${m.text}`).join("\n"),
-          );
-        }
-        throw new Error(`Dewarp failed in page: ${result.message}`);
-      }
+      if (result.kind !== "ok") return;
 
       console.log(`${testName}:`);
       console.log(
@@ -863,11 +650,6 @@ test.describe("Fisheye E2E - Equirectangular Projection", () => {
       console.log(`  MSE: ${result.mse.toFixed(2)}, PSNR: ${result.psnr.toFixed(2)} dB`);
       console.log(`  Max diff: ${result.maxDiff}, Match: ${result.matchPercent.toFixed(2)}%`);
 
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      // Slightly relaxed thresholds for equirectangular
       expect(result.mse).toBeLessThan(150);
       expect(result.psnr).toBeGreaterThan(28);
       expect(result.matchPercent).toBeGreaterThan(85);
@@ -882,6 +664,33 @@ test.describe("Fisheye E2E - Cylindrical Projection", () => {
     const imageName = testCase.original_image_path.split("/").pop()?.replace(".jpg", "") || "";
     const testName = `${imageName} - cam${testCase.camera_id}/${testCase.scenario}: ${testCase.description}`;
 
-    test.skip(testName, async () => {});
+    test(testName, async ({ page }) => {
+      const { pageErrors, consoleMessages } = await setupPageListeners(page);
+
+      await page.goto("/test/e2e/test-page.html");
+      await waitForPageReady(page, pageErrors, consoleMessages);
+
+      const webgpuAvailable = await page.evaluate(
+        () => (window as unknown as TestWindow).webgpuAvailable,
+      );
+      expect(webgpuAvailable, "WebGPU must be available for pixel comparison").toBe(true);
+
+      const result = await runProjectionTest(page, testCase, testName, pageErrors, consoleMessages);
+      handleTestResult(result, testName, pageErrors, consoleMessages);
+
+      if (result.kind !== "ok") return;
+
+      console.log(`${testName}:`);
+      console.log(
+        `  Config: ${testCase.projection}, balance=${testCase.balance}, fovScale=${testCase.fov_scale}`,
+      );
+      console.log(`  Output: ${testCase.output_width}x${testCase.output_height}`);
+      console.log(`  MSE: ${result.mse.toFixed(2)}, PSNR: ${result.psnr.toFixed(2)} dB`);
+      console.log(`  Max diff: ${result.maxDiff}, Match: ${result.matchPercent.toFixed(2)}%`);
+
+      expect(result.mse).toBeLessThan(150);
+      expect(result.psnr).toBeGreaterThan(28);
+      expect(result.matchPercent).toBeGreaterThan(85);
+    });
   }
 });
