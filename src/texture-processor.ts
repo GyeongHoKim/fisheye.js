@@ -146,8 +146,8 @@ export class TextureProcessor {
 
           const isEquirect = p.projection > 0.5 && p.projection < 1.5;
           if (isEquirect) {
-            const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0;
-            const lat = (coordYf / outputH - 0.5) * Math.PI;
+            const lon = ((coordXf / outputW - 0.5) * Math.PI * 2.0) / p.zoomFactor;
+            const lat = ((coordYf / outputH - 0.5) * Math.PI) / p.zoomFactor;
             const cosLat = std.cos(lat);
             dirX = std.sin(lon) * cosLat;
             dirY = std.sin(lat);
@@ -160,8 +160,8 @@ export class TextureProcessor {
             // Cylindrical projection: lon linear, lat via atan (unrolled cylinder)
             // f_cyl = outputW / (2 * pi)
             const fCyl = outputW / (Math.PI * 2.0);
-            const lon = (coordXf / outputW - 0.5) * Math.PI * 2.0; // -pi to pi
-            const lat = std.atan((coordYf - outputH * 0.5) / fCyl); // latitude
+            const lon = ((coordXf / outputW - 0.5) * Math.PI * 2.0) / p.zoomFactor;
+            const lat = std.atan((coordYf - outputH * 0.5) / (fCyl * p.zoomFactor));
 
             // 3D direction vector
             const cosLat = std.cos(lat);

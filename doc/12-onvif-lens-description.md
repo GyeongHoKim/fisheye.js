@@ -35,7 +35,7 @@ JavaScript fields use camelCase. They map to the XSD as follows:
 | `xFactor` | `XFactor` | Horizontal normalized-coordinate compensation |
 | `focalLength` | `@FocalLength` | Optional optical-system metadata |
 
-The origin `(angle=0, radius=0)` is implicit because the XSD says the zero-radius item must not be supplied. Samples must have strictly increasing positive angles and radii. Rays beyond the final angle/radius are black.
+The origin `(angle=0, radius=0)` is implicit because the XSD says the zero-radius item must not be supplied. The ONVIF XSD requires samples to be ordered by increasing radius. fisheye.js additionally requires strictly increasing positive angles because it constructs the forward function `radius(angle)`; descriptions that do not meet that implementation constraint are rejected even if they are schema-valid. Rays beyond the final angle/radius are black.
 
 ## Mapping used by this implementation
 
