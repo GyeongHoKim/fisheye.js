@@ -51,6 +51,11 @@ async function run(engine: TextureProcessor, pixels: Uint8Array, width: number, 
   return Promise.all(outputs.map((texture) => engine.readPixels(texture)));
 }
 
+function pixelAt(pixels: Uint8Array, width: number, x: number, y: number): number[] {
+  const offset = (y * width + x) * 4;
+  return [...pixels.slice(offset, offset + 4)];
+}
+
 it("executes original pixels through production texture pipeline and unaligned readback", async () => {
   const engine = new TextureProcessor(device, {
     width: 7,
@@ -141,6 +146,34 @@ it("preserves the OpenCV zero-distortion mapping", async () => {
   }
 });
 
+it.each([
+  "equirectangular",
+  "cylindrical",
+] as const)("applies PTZ zoom to the %s field of view", async (kind) => {
+  const engine = new TextureProcessor(device, {
+    lens: {
+      kind: "onvif",
+      description: {
+        offset: {},
+        xFactor: 1,
+        projection: [{ angle: 180, radius: 1 }],
+      },
+    },
+    size: { width: 4, height: 4 },
+    projection: { kind },
+    ptz: { zoom: 2 },
+  });
+  try {
+    const [pixels] = await run(engine, gradient(9, 9), 9, 9);
+    const offset = (2 * 4 + 3) * 4;
+    // At x=3, zoom=2 narrows longitude from pi/2 to pi/4. The linear
+    // ONVIF projection maps that to input x=5 instead of input x=6.
+    expect([...pixels.slice(offset, offset + 4)]).toEqual([100, 80, 40, 255]);
+  } finally {
+    engine.destroy();
+  }
+});
+
 it("runs ONVIF panoramic, PTZ and pane paths and model replacement", async () => {
   const lens = {
     kind: "onvif" as const,
@@ -152,20 +185,44 @@ it("runs ONVIF panoramic, PTZ and pane paths and model replacement", async () =>
   };
   const engine = new TextureProcessor(device, {
     lens,
-    size: { width: 5, height: 3 },
+    size: { width: 4, height: 4 },
     projection: { kind: "equirectangular" },
-    ptz: { pan: 10, tilt: -5, zoom: 1.2 },
+    ptz: { pan: 90 },
   });
   try {
-    expect(await run(engine, gradient(9, 9), 9, 9)).toHaveLength(1);
+    const [ptzPixels] = await run(engine, gradient(9, 9), 9, 9);
+    expect(pixelAt(ptzPixels, 4, 2, 2)).toEqual([120, 80, 40, 255]);
+
     engine.updateConfig({ ptz: undefined, pane: { kind: "4pane" } });
-    expect(await run(engine, gradient(9, 9), 9, 9)).toHaveLength(4);
+    const panePixels = await run(engine, gradient(9, 9), 9, 9);
+    expect(panePixels).toHaveLength(4);
+    expect(pixelAt(panePixels[0], 4, 2, 2)).toEqual([80, 80, 40, 255]);
+    expect(pixelAt(panePixels[1], 4, 2, 2)).toEqual([120, 80, 40, 255]);
+    expect(pixelAt(panePixels[3], 4, 2, 2)).toEqual([40, 80, 40, 255]);
+
     engine.updateConfig({
       lens: { kind: "opencv", D: { k1: 0, k2: 0, k3: 0, k4: 0 } },
       pane: undefined,
     });
-    expect(await run(engine, gradient(9, 9), 9, 9)).toHaveLength(1);
+    const [opencvPixels] = await run(engine, gradient(9, 9), 9, 9);
+    expect(pixelAt(opencvPixels, 4, 3, 2)).toEqual([0, 0, 0, 255]);
   } finally {
     engine.destroy();
   }
+});
+
+it("rebinds resized input textures and releases resources idempotently", async () => {
+  const engine = new TextureProcessor(device, {
+    size: { width: 2, height: 2 },
+    projection: { kind: "original" },
+  });
+  const [largePixels] = await run(engine, gradient(9, 9), 9, 9);
+  expect(pixelAt(largePixels, 2, 1, 1)).toEqual([90, 90, 40, 255]);
+
+  const [smallPixels] = await run(engine, gradient(5, 5), 5, 5);
+  expect(pixelAt(smallPixels, 2, 1, 1)).toEqual([50, 50, 40, 255]);
+
+  engine.destroy();
+  expect(() => engine.destroy()).not.toThrow();
+  expect(() => engine.getInputTexture(1, 1)).toThrow("TextureProcessor has been destroyed");
 });
