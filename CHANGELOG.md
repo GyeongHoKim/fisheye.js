@@ -1,3 +1,16 @@
+# [2.2.0](https://github.com/GyeongHoKim/fisheye.js/compare/v2.1.0...v2.2.0) (2026-09-17)
+
+
+### Bug Fixes
+
+* apply PTZ zoom to panoramic projections ([94190b1](https://github.com/GyeongHoKim/fisheye.js/commit/94190b1c54ec870a9d0f258938fe1a3048760a73))
+* preserve ONVIF vertical orientation ([fdac2a7](https://github.com/GyeongHoKim/fisheye.js/commit/fdac2a7da035f7a386cfc2b1eb2febde49a7c23b))
+
+
+### Features
+
+* add ONVIF lens descriptions ([0e45d21](https://github.com/GyeongHoKim/fisheye.js/commit/0e45d21cae920133804aadadd1a8331af3ce8faa)), closes [#8](https://github.com/GyeongHoKim/fisheye.js/issues/8)
+
 # [2.1.0](https://github.com/GyeongHoKim/fisheye.js/compare/v2.0.0...v2.1.0) (2026-02-02)
 
 
