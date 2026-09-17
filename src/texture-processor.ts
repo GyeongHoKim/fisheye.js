@@ -209,7 +209,7 @@ export class TextureProcessor {
             validProjection = validProjection && radius <= p.maxRadius;
             const safeRadialLength = std.max(radialLength, 1e-8);
             const radialX = (dirX * radius) / safeRadialLength;
-            const radialY = (dirY * radius) / safeRadialLength;
+            const radialY = (-dirY * radius) / safeRadialLength;
             const sensorX = radialX * p.xFactor - p.offsetX;
             const sensorY = radialY - p.offsetY;
             // Annex B defines sensor coordinates on [-1, 1]. Map the two

@@ -44,7 +44,7 @@ The supplied samples are converted from degrees to radians and interpolated with
 ```text
 alpha = atan2(sqrt(dx² + dy²), dz)
 R = spline(alpha)
-(rx, ry) = R * (dx, dy) / sqrt(dx² + dy²)
+(rx, ry) = R * (dx, -dy) / sqrt(dx² + dy²)
 sensorX = rx * XFactor - Offset.x
 sensorY = ry - Offset.y
 ```
