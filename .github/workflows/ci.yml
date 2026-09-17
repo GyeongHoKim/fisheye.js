@@ -25,3 +25,6 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
+
+      - name: Run WebGPU tests with pinned Dawn and Lavapipe
+        run: npm run test:gpu:container

@@ -1,0 +1,9 @@
+.git
+.worktrees
+node_modules
+example/node_modules
+dist
+example/dist
+test-results
+playwright-report
+.superpowers

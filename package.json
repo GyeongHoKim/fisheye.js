@@ -23,8 +23,13 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "type-check": "tsc --noEmit",
-    "test": "npm run test:unit && npm run test:e2e",
-    "test:e2e": "npm run build && playwright test",
+    "test": "npm run test:unit && npm run test:gpu",
+    "test:gpu": "vitest run --config vitest.gpu.config.ts",
+    "test:gpu:container": "docker build --platform linux/amd64 -f test/gpu/Dockerfile -t fisheye-webgpu-test . && docker run --rm --platform linux/amd64 fisheye-webgpu-test npm run test:gpu",
+    "test:gpu:repeat": "node test/gpu/repeat.mjs",
+    "test:browser": "npm run build && playwright test test/e2e/fisheye.smoke.spec.ts",
+    "test:e2e": "npm run test:browser",
+    "test:e2e:legacy": "npm run build && playwright test test/e2e/fisheye.e2e.spec.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:unit:ui": "vitest --ui",
@@ -59,7 +64,7 @@
   },
   "homepage": "https://github.com/GyeongHoKim/fisheye.js#readme",
   "dependencies": {
-    "typegpu": "^0.9.0"
+    "typegpu": "0.12.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.13",
@@ -76,10 +81,11 @@
     "husky": "^9.1.7",
     "semantic-release": "^25.0.2",
     "typescript": "^5.9.3",
-    "unplugin-typegpu": "^0.9.0",
+    "unplugin-typegpu": "0.12.3",
     "vite": "^7.2.4",
     "vite-plugin-dts": "^4.3.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "webgpu": "0.6.1"
   },
   "engines": {
     "node": ">=24.0.0"

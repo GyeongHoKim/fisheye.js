@@ -4,12 +4,13 @@ DEMO: <https://gyeonghokim.github.io/fisheye.js/>
 
 > Modern fisheye undistortion library for the web using **WebGPU** (general-purpose GPU compute)
 
-fisheye.js processes [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)s with **WebGPU compute shaders**—no canvas 2D—and corrects fisheye lens distortion using the **OpenCV fisheye model** (Kannala–Brandt–style polynomial in angle θ with coefficients k1–k4). This is the same model as in [OpenCV's fisheye module](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html).
+fisheye.js processes [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)s with **WebGPU compute shaders**—no canvas 2D—and corrects fisheye lens distortion using either the **OpenCV fisheye model** or an **ONVIF Media2 `LensDescription`**.
 
 ## Features
 
 - **WebGPU GPGPU**: Compute-shader pipeline via [TypeGPU](https://www.npmjs.com/package/typegpu); input/output as textures and readback to VideoFrame—no canvas element for undistortion
 - **OpenCV fisheye (Kannala–Brandt) model**: Distortion model `θ_d = θ × (1 + k1·θ² + k2·θ⁴ + k3·θ⁶ + k4·θ⁸)` for accurate calibration
+- **ONVIF Media2 lens model**: Angle/radius projection samples, normalized lens offsets, and XFactor support from Annex B
 - **WebCodecs**: Built on the [VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame) API
 - **ESM**: `import { Fisheye } from "@gyeonghokim/fisheye.js"`
 - **npm**: Install via npm or other package managers
@@ -90,6 +91,24 @@ const fisheyeManual = new Fisheye({
   projection: { kind: "rectilinear", mode: "manual", newFx: 800, newFy: 800 },
 });
 
+// Option 4: Explicit ONVIF Media2 LensDescription model
+const fisheyeOnvif = new Fisheye({
+  lens: {
+    kind: "onvif",
+    description: {
+      offset: { x: 0.01, y: -0.02 },
+      xFactor: 0.5625,
+      projection: [
+        { angle: 30, radius: 0.25 },
+        { angle: 60, radius: 0.52 },
+        { angle: 90, radius: 0.82 },
+      ],
+    },
+  },
+  size: { width: 1920, height: 1080 },
+  projection: { kind: "rectilinear", horizontalFov: 100 },
+});
+
 const renderLoop = async (timestamp: DOMHighResTimestamp) => {
   const undistorted: VideoFrame = await fisheye.undistort(yourVideoFrame);
   yourYUVPlayer.draw(undistorted);
@@ -113,6 +132,18 @@ u = fx(x' + αy') + cx,  v = fy × y' + cy             # pixel coords
 ```
 
 This is the same model as [OpenCV's fisheye module](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html).
+
+### Distortion Model: ONVIF Media2 LensDescription
+
+Use the explicit `lens` union when calibration comes from ONVIF:
+
+```ts
+type LensModel =
+  | { kind: "opencv"; K?: KMatrix; D: DVector }
+  | { kind: "onvif"; description: OnvifLensDescription };
+```
+
+ONVIF samples are interpolated from the implicit origin with a natural cubic spline. The standard requires smooth B-Spline approximation but does not prescribe its degree, knots, boundary conditions, or compensation algorithm; this spline is therefore a documented fisheye.js convention. `focalLength` and per-sample `transmittance` are validated and retained but do not currently affect pixels. See [the ONVIF guide](doc/12-onvif-lens-description.md) and [archived official sources](doc/references/onvif/README.md).
 
 **Important:** OpenCV's `fisheye.undistortImage()` always outputs **rectilinear (perspective) projection only**. It does not provide panoramic or other projection modes.
 
@@ -171,6 +202,16 @@ Creates a new Fisheye undistortion instance.
 | `fovScale` | `number?` | `1.0`      | FOV scale (>1.0 = widen FOV, <1.0 = narrow FOV)          |
 
 **Note:** These parameters exactly match [OpenCV fisheye API](https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html). Use values from `cv2.fisheye.calibrate()` or `cv2.fisheye.estimateNewCameraMatrixForUndistortRectify()`.
+
+#### Explicit lens model options
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `lens` | `LensModel` | Selects `{ kind: "opencv", K?, D }` or `{ kind: "onvif", description }`. Do not mix it with legacy flat/grouped camera fields. |
+| `size` | `ImageSize?` | Output dimensions for the explicit lens API. Defaults to `300 × 150`. |
+| `projection.horizontalFov` | `number?` | Automatic ONVIF rectilinear horizontal FOV in degrees; default `90`, range `(0, 180)`. |
+
+`balance` and `fovScale` apply only to the OpenCV model. A lens update replaces the complete lens model atomically.
 
 #### Mode options (e-PTZ vs multi-pane)
 
@@ -318,6 +359,10 @@ npm run build      # Build the library
 npm run dev        # Build in watch mode
 npm run lint       # Run linter
 npm run lint:fix   # Fix linting issues
+npm run test:unit  # CPU math and API tests
+npm run test:gpu   # Native Dawn test with an available adapter
+npm run test:gpu:container # Reproducible Dawn + Lavapipe test
+npm run test:browser # Browser VideoFrame smoke test
 npm run format     # Format code
 npm run type-check # Check TypeScript types
 ```

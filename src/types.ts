@@ -87,6 +87,8 @@ export interface NewCameraMatrix {
 export interface RectilinearAuto {
   readonly kind: "rectilinear";
   readonly mode?: undefined;
+  /** ONVIF only: horizontal output field of view in degrees (default 90). */
+  readonly horizontalFov?: number;
 }
 
 /** Rectilinear projection with explicit P matrix (manual newFx, newFy, etc.). */
@@ -277,7 +279,36 @@ export type FisheyeConfigUpdate = Partial<FisheyeConfig>;
 /**
  * Constructor/update options: either flat ({@link FisheyeOptionsStrict}) or grouped ({@link FisheyeConfig}).
  */
-export type FisheyeOptions = FisheyeOptionsStrict | FisheyeConfig;
+export type LensModel =
+  | { kind: "opencv"; K?: KMatrix; D: DVector }
+  | { kind: "onvif"; description: import("./onvif").OnvifLensDescription };
+
+type CommonLensOptions = ModeOptions & {
+  size?: ImageSize;
+  projection?: FisheyeProjection;
+};
+
+/** New explicit model API; legacy camera fields cannot be mixed with it. */
+export type LensOptions = CommonLensOptions & {
+  K?: never;
+  D?: never;
+  fx?: never;
+  fy?: never;
+  cx?: never;
+  cy?: never;
+  alpha?: never;
+  k1?: never;
+  k2?: never;
+  k3?: never;
+  k4?: never;
+  width?: never;
+  height?: never;
+} & (
+    | { lens: Extract<LensModel, { kind: "opencv" }>; balance?: number; fovScale?: number }
+    | { lens: Extract<LensModel, { kind: "onvif" }>; balance?: never; fovScale?: never }
+  );
+
+export type FisheyeOptions = FisheyeOptionsStrict | FisheyeConfig | LensOptions;
 
 // ─── Factory Functions ──────────────────────────────────────────────────────
 

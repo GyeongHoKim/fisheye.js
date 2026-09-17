@@ -11,9 +11,11 @@ Brief description of changes.
 
 ## Checklist
 
-> **E2E tests (WebGPU):** WebGPU API is not available in CI. You must run `npm run test:e2e` **locally** and ensure it passes before submitting a PR.
+> **WebGPU tests:** CI executes the production TypeGPU pipeline through Dawn and pinned Mesa Lavapipe. Browser testing remains a small `VideoFrame` integration smoke test.
 
 - [ ] `npm run lint` passes
 - [ ] `npm run type-check` passes
 - [ ] `npm run build` passes
-- [ ] `npm run test:e2e` passes (run locally; WebGPU is not available in CI)
+- [ ] `npm run test:unit` passes
+- [ ] `npm run test:gpu:container` passes
+- [ ] `npm run test:browser` passes locally when browser integration changed
