@@ -93,6 +93,8 @@ it("evaluates ONVIF spline, XFactor and offset in the production shader", async 
     // Manual focal lengths use input-pixel units and scale to the output size. Here f=1/3,
     // so x=2 produces theta=atan(3), R=atan(3)/(pi/2), then XFactor and offset.
     expect([...pixels.slice(5 * 4, 5 * 4 + 4)]).toEqual([96, 80, 40, 255]);
+    // Positive output y remains downward in the input image, matching the OpenCV path.
+    expect(pixelAt(pixels, 3, 1, 2)).toEqual([64, 144, 40, 255]);
   } finally {
     engine.destroy();
   }
