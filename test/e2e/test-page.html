@@ -7,9 +7,12 @@
     <script type="importmap">
       {
         "imports": {
-          "typegpu": "https://esm.sh/typegpu@0.9.0",
-          "typegpu/data": "https://esm.sh/typegpu@0.9.0/data",
-          "typegpu/std": "https://esm.sh/typegpu@0.9.0/std"
+          "typegpu": "/node_modules/typegpu/index.js",
+          "typegpu/data": "/node_modules/typegpu/data/index.js",
+          "typegpu/std": "/node_modules/typegpu/std/index.js",
+          "tinyest": "/node_modules/tinyest/index.js",
+          "tsover-runtime": "/node_modules/tsover-runtime/dist/index.js",
+          "typed-binary": "/node_modules/typed-binary/dist/index.js"
         }
       }
     </script>
@@ -17,17 +20,16 @@
   <body>
     <h1>E2E Test Page</h1>
     <script type="module">
-      // Import the library from the built dist folder
-      import { Fisheye } from "../../dist/index.js";
-
-      const webgpuAvailable = !!navigator.gpu;
-      const gpuAdapterInfo = null;
-
-      // Expose to window for Playwright access
-      window.Fisheye = Fisheye;
-      window.webgpuAvailable = webgpuAvailable;
-      window.gpuAdapterInfo = gpuAdapterInfo;
-      window.testReady = true;
+      try {
+        globalThis.process = { env: { NODE_ENV: "production" } };
+        const { Fisheye } = await import("../../dist/index.js");
+        window.Fisheye = Fisheye;
+        window.webgpuAvailable = !!navigator.gpu;
+        window.gpuAdapterInfo = null;
+        window.testReady = true;
+      } catch (error) {
+        window.testError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      }
     </script>
   </body>
 </html>

@@ -13,9 +13,11 @@ Attribution: Wikimedia Commons, “Spherical coordinate system” (CC BY-SA 4.0)
 
 Fisheye models differ by convention. A single mistake (for example using `tan(theta_d)` instead of `theta_d`) produces a visually plausible but **wrong** result. Tests encode the correct convention.
 
-## 2. Reference implementation used for tests
+## 2. CPU and native WebGPU coverage
 
-In `src/fisheye.spec.ts`, the test function `opencvFisheyeForward()` computes:
+Unit tests validate option normalization and the ONVIF spline independently of the shader. Native GPU tests then run the production TypeGPU compute pipeline using Dawn's Node bindings. CI puts Dawn over Mesa Lavapipe in a pinned Linux container, so correctness does not depend on the runner's physical GPU or browser version.
+
+The OpenCV reference mapping computes:
 
 ```
 theta = atan(r)
@@ -41,9 +43,19 @@ flowchart LR
   XY --> Check["r_d = |(x',y')| = theta_d"]
 ```
 
-## 3. End-to-end validation
+## 3. Test layers
 
-The `test/dewarp.spec.ts` test renders a full dewarp and compares against known-good fixtures. This detects:
+| Script | Purpose |
+| --- | --- |
+| `npm run test:unit` | CPU validation, config/API behavior, spline endpoints and invalid inputs |
+| `npm run test:gpu` | Production compute shader with an available Dawn adapter |
+| `npm run test:gpu:container` | Pinned Dawn + Lavapipe software execution used by CI |
+| `npm run test:gpu:repeat` | Ten independent native runs with no retry masking |
+| `npm run test:browser` | Small real-`VideoFrame` browser ingress/egress smoke test |
+
+Native tests use generated lossless RGBA pixels and exact or independently calculated expected values. They cover row-padding readback, OpenCV and ONVIF mappings, invalid-ray masking, projections, PTZ, pane output, resizing, and model replacement. GPU validation errors and unexpected device loss fail the suite.
+
+The old large browser/fixture comparison remains available as `npm run test:e2e:legacy`; it is no longer the required CI correctness gate.
 
 - Shader regressions or math mistakes
 - Resource binding bugs
@@ -53,9 +65,11 @@ The `test/dewarp.spec.ts` test renders a full dewarp and compares against known-
 
 1. **Model mismatch**: check the polynomial and the `r_d = theta_d` convention.
 2. **Uniform values**: verify that `k1..k4`, `fov`, `center`, and `zoom` are correct.
-3. **FOV scaling**: confirm the corner scaling (`sqrt(2)` factor) is applied.
+3. **Adapter selection**: container runs must report Lavapipe/llvmpipe; missing or hardware adapters are failures.
+4. **FOV and coordinate conventions**: confirm degrees/radians, normalized sensor offsets, XFactor, and texel-center mapping.
 
 ## What to remember
 
 - Tests encode the **derivation** in executable form.
-- If tests pass, the implementation matches the intended model.
+- Native software-GPU tests remove browser and physical-GPU variability from the core gate.
+- Passing synthetic tests is not a substitute for validation against a real ONVIF camera.

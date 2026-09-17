@@ -16,3 +16,4 @@ This documentation set teaches the math and GPU concepts behind fisheye.js for w
 9. [Configuration and Tuning Guide](05-configuration-tuning.md)
 10. [GPU Rendering and TypeGPU Abstraction](07-gpu-rendering-typegpu.md)
 11. [Validation and Testing](06-validation-testing.md)
+12. [ONVIF Media2 Lens Descriptions](12-onvif-lens-description.md)

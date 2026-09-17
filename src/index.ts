@@ -1,4 +1,5 @@
 export { Fisheye } from "./fisheye";
+export type { OnvifLensDescription, OnvifLensProjection } from "./onvif";
 export type {
   CameraIntrinsics,
   DVector,
@@ -10,6 +11,8 @@ export type {
   FourPaneLayout,
   ImageSize,
   KMatrix,
+  LensModel,
+  LensOptions,
   NewCameraMatrix,
   OutputSize,
   PaneLayout,
